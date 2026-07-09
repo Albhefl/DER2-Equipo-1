@@ -24,7 +24,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export const Login: React.FC = () => {
   // Estado local para alternar la visibilidad de la contraseña (ojo abierto/cerrado)
   const [showPassword, setShowPassword] = useState(false);
-  
+
   // Estado local para capturar y mostrar errores controlados provenientes de la API (HU-009.2)
   const [backendError, setBackendError] = useState<string | null>(null);
 
@@ -64,23 +64,23 @@ export const Login: React.FC = () => {
 
       // Si las credenciales son válidas, almacena el JSON Web Token de forma segura
       localStorage.setItem('token', resData.token);
-      
+
       // Redirección inmediata al tablero del estudiante tras el inicio de sesión exitoso
       window.location.href = '/dashboard';
     } catch (error: any) {
       // Captura el mensaje de error para pintarlo en la alerta de la interfaz
-      setBackendError(error.message);
+      setBackendError(error.message || 'No se pudo conectar con el servidor. Intenta más tarde.');
     }
   };
 
   return (
     // Contenedor principal centrado con el color de fondo de la guía de estilos (#F6F7FB)
     <div className="bg-[#F6F7FB] min-h-screen flex flex-col items-center justify-center p-4 font-sans tracking-tight">
-      
+
       {/* SECCIÓN IDENTIDAD VISUAL - Título e Iconos Vectoriales del Prototipo */}
       <div className="text-center mb-5">
         <h1 className="text-[40px] font-bold text-[#111827] tracking-tight mb-0.5">ClassBoard</h1>
-        
+
         {/* SVGs en gris (#687280) que replican exactamente los iconos del boceto */}
         <div className="flex justify-center gap-4 text-[#687280] text-sm mt-1">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
@@ -91,7 +91,7 @@ export const Login: React.FC = () => {
 
       {/* TARJETA DEL FORMULARIO - Bordes redondeados de 20px y sombra sutil */}
       <div className="bg-white p-9 rounded-[20px] border border-[#E5E7EB] w-full max-w-[400px] shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
-        
+
         {/* ALERTA DE ERROR GENERAL - Se muestra dinámicamente si el backend rechaza los datos */}
         {backendError && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm p-2.5 rounded-xl text-center font-medium">
@@ -101,7 +101,7 @@ export const Login: React.FC = () => {
 
         {/* Formulario nativo conectado al handleSubmit de React Hook Form */}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-          
+
           {/* CAMPO: EMAIL */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="email" className="text-[16px] font-regular text-[#111827]">
@@ -114,8 +114,8 @@ export const Login: React.FC = () => {
               placeholder="floresjarumi312@gmail.com"
               // Clases condicionales de Tailwind: Si hay error de Zod pinta borde rojo, si no usa el gris pizarra (#94A3BB)
               className={`w-full px-4 py-2.5 rounded-xl text-black font-regular placeholder-[#687280] focus:outline-none transition-all text-[15px] ${
-                errors.email 
-                  ? 'bg-red-50 border-2 border-red-500' 
+                errors.email
+                  ? 'bg-red-50 border-2 border-red-500'
                   : 'bg-[#94A3BB] text-white placeholder-gray-200 border border-transparent focus:bg-[#8392AA]'
               }`}
             />
@@ -138,8 +138,8 @@ export const Login: React.FC = () => {
                 placeholder="••••••••••••"
                 // Fondo gris muy claro (#F6F7FB) acorde al prototipo analizado
                 className={`w-full px-4 py-2.5 rounded-xl text-[#111827] font-regular placeholder-[#687280] border focus:outline-none transition-all pr-12 text-[15px] ${
-                  errors.password 
-                    ? 'bg-red-50 border-2 border-red-500' 
+                  errors.password
+                    ? 'bg-red-50 border-2 border-red-500'
                     : 'bg-[#F6F7FB] border-[#E5E7EB] focus:border-[#94A3BB]'
                 }`}
               />
