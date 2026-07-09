@@ -104,7 +104,7 @@ export const Login: React.FC = () => {
               {...register('email')}
               type="email"
               id="email"
-              placeholder="floresjarumi312@gmail.com"
+              placeholder="example@email.com"
               className={`w-full px-4 py-2.5 rounded-xl text-black font-regular placeholder-[#687280] focus:outline-none transition-all text-[15px] ${
                 errors.email 
                   ? 'bg-red-50 border-2 border-red-500' 
