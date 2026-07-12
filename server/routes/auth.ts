@@ -35,7 +35,7 @@ router.post('/register', async (req: Request, res: Response): Promise<any> => {
       return res.status(400).json({ message: 'Todos los campos son obligatorios.' });
     }
 
-    // 🔐 ENCRIPTA CIÓN AUTOMÁTICA
+    // 🔐 ENCRIPTACIÓN AUTOMÁTICA
     const salt = await bcrypt.genSalt(10);
     const passwordEncriptada = await bcrypt.hash(password, salt);
 
@@ -75,7 +75,7 @@ router.post('/login', loginLimiter, async (req: Request, res: Response): Promise
 
     // Buscar en la tabla de XAMPP
     const [rows]: any = await db.query('SELECT * FROM usuarios WHERE email = ?', [email.trim()]);
-    
+
     if (!rows || rows.length === 0) {
       return res.status(401).json({ message: 'Credenciales incorrectas. Intenta de nuevo.' });
     }

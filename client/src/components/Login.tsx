@@ -5,24 +5,20 @@ import * as z from 'zod';
 
 /**
  * 1. ESQUEMA DE VALIDACIÓN CON ZOD (Criterio HU-009.1)
- * Define las reglas estrictas que deben cumplir los campos antes de enviarse.
- * Si las reglas fallan, se intercepta el envío en el cliente sin tocar el servidor.
  */
 const loginSchema = z.object({
   email: z
     .string()
-    .min(1, { message: 'El correo electrónico es obligatorio.' }) // Valida que no esté vacío
-    .email({ message: 'Formato de correo electrónico inválido.' }),  // Valida estructura de email
+    .min(1, { message: 'El correo electrónico es obligatorio.' })
+    .email({ message: 'Formato de correo electrónico inválido.' }),
   password: z
     .string()
-    .min(1, { message: 'La contraseña es obligatoria.' }),          // Valida que no esté vacía
+    .min(1, { message: 'La contraseña es obligatoria.' }),
 });
 
-// Extrae automáticamente el tipo de TypeScript basado en el esquema de Zod
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export const Login: React.FC = () => {
-  // Estado local para alternar la visibilidad de la contraseña (ojo abierto/cerrado)
   const [showPassword, setShowPassword] = useState(false);
 
   // Estado local para capturar y mostrar errores controlados provenientes de la API (HU-009.2)
@@ -30,35 +26,37 @@ export const Login: React.FC = () => {
 
   /**
    * 2. CONFIGURACIÓN DE REACT HOOK FORM
-   * Se vincula con 'zodResolver' para heredar automáticamente las validaciones del esquema.
    */
   const {
-    register,         // Función para registrar los inputs y enlazar sus estados
-    handleSubmit,     // Manejador que envuelve la función onSubmit y valida primero el esquema
-    formState: { errors, isSubmitting }, // Extrae los errores de validación y el estado de carga
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
   } = useForm<LoginFormData>({
-    resolver: zodResolver(loginSchema), // Conector oficial de Zod con los formularios de React
+    resolver: zodResolver(loginSchema),
   });
 
   /**
-   * 3. FUNCIÓN DE ENVÍO (Manejo de peticiones al Servidor)
-   * Solo se ejecuta si Zod confirma que no hay campos vacíos ni formatos inválidos.
+   * 3. FUNCIÓN DE ENVÍO UNIFICADA (Conexión Frontend - Backend HU-009.2)
    */
   const onSubmit = async (data: LoginFormData) => {
-    setBackendError(null); // Limpia errores previos del backend antes de intentar de nuevo
+    setBackendError(null); // Limpiamos errores previos al intentar conectar
+
     try {
-      // Petición HTTP POST hacia la API de autenticación en Node/Express
       const response = await fetch('http://localhost:3000/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data), // Envía las credenciales limpias en formato JSON
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+        }),
       });
 
       const resData = await response.json();
 
-      // Si el servidor responde con un código de error (400, 401, 500, etc.)
+      // Criterio HU-009.2: Si el servidor responde con un código de error (400 o 401)
       if (!response.ok) {
-        // Criterio HU-009.2: Dispara el error genérico seguro ("Credenciales incorrectas...")
         throw new Error(resData.message || 'Credenciales incorrectas. Intenta de nuevo.');
       }
 
@@ -67,6 +65,7 @@ export const Login: React.FC = () => {
 
       // Redirección inmediata al tablero del estudiante tras el inicio de sesión exitoso
       window.location.href = '/dashboard';
+
     } catch (error: any) {
       // Captura el mensaje de error para pintarlo en la alerta de la interfaz
       setBackendError(error.message || 'No se pudo conectar con el servidor. Intenta más tarde.');
@@ -74,7 +73,6 @@ export const Login: React.FC = () => {
   };
 
   return (
-    // Contenedor principal centrado con el color de fondo de la guía de estilos (#F6F7FB)
     <div className="bg-[#F6F7FB] min-h-screen flex flex-col items-center justify-center p-4 font-sans tracking-tight">
 
       {/* SECCIÓN IDENTIDAD VISUAL - Título e Iconos Vectoriales del Prototipo */}
@@ -89,7 +87,7 @@ export const Login: React.FC = () => {
         </div>
       </div>
 
-      {/* TARJETA DEL FORMULARIO - Bordes redondeados de 20px y sombra sutil */}
+      {/* TARJETA DEL FORMULARIO */}
       <div className="bg-white p-9 rounded-[20px] border border-[#E5E7EB] w-full max-w-[400px] shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
 
         {/* ALERTA DE ERROR GENERAL - Se muestra dinámicamente si el backend rechaza los datos */}
@@ -99,7 +97,6 @@ export const Login: React.FC = () => {
           </div>
         )}
 
-        {/* Formulario nativo conectado al handleSubmit de React Hook Form */}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
 
           {/* CAMPO: EMAIL */}
@@ -108,7 +105,7 @@ export const Login: React.FC = () => {
               Email
             </label>
             <input
-              {...register('email')} // Enlace con React Hook Form
+              {...register('email')}
               type="email"
               id="email"
               placeholder="email@example.com"
@@ -118,7 +115,6 @@ export const Login: React.FC = () => {
                   : 'bg-[#94A3BB] text-white placeholder-gray-200 border border-transparent focus:bg-[#8392AA]'
               }`}
             />
-            {/* Mensaje de error sutil debajo del input si la validación falla */}
             {errors.email && (
               <p className="text-red-500 text-xs font-medium pl-1">{errors.email.message}</p>
             )}
@@ -132,17 +128,15 @@ export const Login: React.FC = () => {
             <div className="relative">
               <input
                 {...register('password')}
-                type={showPassword ? 'text' : 'password'} // Cambia dinámicamente según el estado del ojo
+                type={showPassword ? 'text' : 'password'}
                 id="password"
                 placeholder="••••••••••••"
-                // Fondo gris muy claro (#F6F7FB) acorde al prototipo analizado
                 className={`w-full px-4 py-2.5 rounded-xl text-[#111827] font-regular placeholder-[#687280] border focus:outline-none transition-all pr-12 text-[15px] ${
                   errors.password
                     ? 'bg-red-50 border-2 border-red-500'
                     : 'bg-[#F6F7FB] border-[#E5E7EB] focus:border-[#94A3BB]'
                 }`}
               />
-              {/* Botón interactivo para alternar el tipo de input (ver/ocultar texto) */}
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
@@ -156,23 +150,23 @@ export const Login: React.FC = () => {
             )}
           </div>
 
-          {/* BOTÓN DE ACCIÓN PRINCIPAL - Color azul marino corporativo (#0B1026) */}
+          {/* BOTÓN DE ACCIÓN PRINCIPAL */}
           <button
             type="submit"
-            disabled={isSubmitting} // Se deshabilita mientras dura la petición HTTP para evitar duplicados
+            disabled={isSubmitting}
             className="w-full bg-[#0B1026] hover:bg-opacity-95 text-white font-semibold py-3 px-4 rounded-xl transition-all text-[16px] mt-2 disabled:opacity-50"
           >
             {isSubmitting ? 'Iniciando sesión...' : 'Iniciar sesión'}
           </button>
 
-          {/* SOPORTE DE CUENTA - Recuperación de contraseña ubicada abajo del botón */}
+          {/* SOPORTE DE CUENTA */}
           <div className="text-center pt-1">
             <a href="#" className="text-[16px] font-regular text-[#111827] hover:underline">
               ¿Olvidaste tu contraseña?
             </a>
           </div>
 
-          {/* DIVISOR INTERMEDIO - Línea sutil rota por un círculo con la letra "o" */}
+          {/* DIVISOR INTERMEDIO */}
           <div className="relative flex py-2 items-center justify-center">
             <div className="flex-grow border-t border-[#E5E7EB]"></div>
             <span className="flex-shrink mx-3 text-[13px] text-[#687280] border border-[#E5E7EB] rounded-full w-5 h-5 flex items-center justify-center bg-white">o</span>
