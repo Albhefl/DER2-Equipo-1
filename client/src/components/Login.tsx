@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { useNavigate } from 'react-router-dom'; // <-- 1. Importación agregada
 
 /**
  * 1. ESQUEMA DE VALIDACIÓN CON ZOD (Criterio HU-009.1)
@@ -19,9 +20,10 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export const Login: React.FC = () => {
+  const navigate = useNavigate(); // <-- 2. Inicialización del navegador
   const [showPassword, setShowPassword] = useState(false);
 
-  // Estado local para capturar y mostrar errores controlados provenientes de la API (HU-009.2)
+  // Estado local para capturar y mostrar errores controlados provenientes de la API (HU-009.2 / HU-010.3)
   const [backendError, setBackendError] = useState<string | null>(null);
 
   /**
@@ -36,7 +38,7 @@ export const Login: React.FC = () => {
   });
 
   /**
-   * 3. FUNCIÓN DE ENVÍO UNIFICADA (Conexión Frontend - Backend HU-009.2)
+   * 3. FUNCIÓN DE ENVÍO UNIFICADA (Conexión Frontend - Backend HU-009.2 y HU-011.2)
    */
   const onSubmit = async (data: LoginFormData) => {
     setBackendError(null); // Limpiamos errores previos al intentar conectar
@@ -55,7 +57,7 @@ export const Login: React.FC = () => {
 
       const resData = await response.json();
 
-      // Criterio HU-009.2: Si el servidor responde con un código de error (400 o 401)
+      // Criterio HU-009.2 / HU-010.3: Si el servidor responde con un código de error (400, 401, 429)
       if (!response.ok) {
         throw new Error(resData.message || 'Credenciales incorrectas. Intenta de nuevo.');
       }
@@ -63,11 +65,19 @@ export const Login: React.FC = () => {
       // Si las credenciales son válidas, almacena el JSON Web Token de forma segura
       localStorage.setItem('token', resData.token);
 
-      // Redirección inmediata al tablero del estudiante tras el inicio de sesión exitoso
-      window.location.href = '/dashboard';
+      // 🔀 3. REDIRECCIÓN INTELIGENTE BASADA EN ROLES (Corregido para MySQL con 'role' y MAYÚSCULAS)
+      // Buscamos 'role' (con e) y lo pasamos a minúsculas para comparar limpio
+      const userRole = (resData.user?.role || resData.role || "").toLowerCase().trim();
 
+      if (userRole === 'estudiante') {
+        navigate('/estudiante-dashboard');
+      } else if (userRole === 'evaluador') {
+        navigate('/evaluador-dashboard');
+      } else {
+        throw new Error(`El usuario tiene el rol '${userRole}', el cual no es válido.`);
+      }
     } catch (error: any) {
-      // Captura el mensaje de error para pintarlo en la alerta de la interfaz
+      // Captura el mensaje de error para pintarlo en la alerta de la interfaz (incluye bloqueo por fuerza bruta)
       setBackendError(error.message || 'No se pudo conectar con el servidor. Intenta más tarde.');
     }
   };
@@ -83,14 +93,14 @@ export const Login: React.FC = () => {
         <div className="flex justify-center gap-4 text-[#687280] text-sm mt-1">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 002-2h-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path></svg>
         </div>
       </div>
 
       {/* TARJETA DEL FORMULARIO */}
       <div className="bg-white p-9 rounded-[20px] border border-[#E5E7EB] w-full max-w-[400px] shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
 
-        {/* ALERTA DE ERROR GENERAL - Se muestra dinámicamente si el backend rechaza los datos */}
+        {/* ALERTA DE ERROR GENERAL - Se muestra dinámicamente si el backend rechaza los datos o bloquea por IP */}
         {backendError && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm p-2.5 rounded-xl text-center font-medium">
             {backendError}
