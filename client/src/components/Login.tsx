@@ -111,8 +111,7 @@ export const Login: React.FC = () => {
               {...register('email')} // Enlace con React Hook Form
               type="email"
               id="email"
-              placeholder="floresjarumi312@gmail.com"
-              // Clases condicionales de Tailwind: Si hay error de Zod pinta borde rojo, si no usa el gris pizarra (#94A3BB)
+              placeholder="email@example.com"
               className={`w-full px-4 py-2.5 rounded-xl text-black font-regular placeholder-[#687280] focus:outline-none transition-all text-[15px] ${
                 errors.email
                   ? 'bg-red-50 border-2 border-red-500'
