@@ -23,10 +23,11 @@ export const SidebarEvaluador: React.FC = () => {
   `;
 
   return (
-    <aside className="w-[240px] bg-white border-r border-gray-100 flex flex-col p-4 shrink-0 justify-between min-h-screen">
+    // 🟢 CAMBIO AQUÍ: Quitamos w-[240px], border-r y min-h-screen para que use el ancho que el Layout le asigne en web o móvil.
+    <div className="w-full flex flex-col justify-between h-full p-4 bg-white">
       <div className="space-y-6">
-        {/* LOGO */}
-        <div className="flex items-center gap-3 px-3 py-4">
+        {/* LOGO (Solo se muestra en computadoras, en móvil ya tenemos el header del layout) */}
+        <div className="hidden md:flex items-center gap-3 px-3 py-4">
           <div className="w-8 h-8 bg-[#2563EB] text-white flex items-center justify-center rounded-lg font-bold text-sm">
             <LayoutDashboard size={14} />
           </div>
@@ -58,11 +59,11 @@ export const SidebarEvaluador: React.FC = () => {
       </div>
 
       {/* BOTÓN INFERIOR DE CERRAR SESIÓN */}
-      <div className="pt-4 border-t border-gray-50">
+      <div className="pt-4 border-t border-gray-50 mt-auto">
         <Link to="/login" className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-gray-400 hover:bg-red-50 hover:text-red-500 text-[14px] transition-colors font-medium">
           <LogOut size={18} /> Cerrar sesión
         </Link>
       </div>
-    </aside>
+    </div>
   );
 };
