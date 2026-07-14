@@ -11,56 +11,6 @@ import {
 } from "lucide-react";
 
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
-const MOCK_ACTIVITIES = [
-  {
-    id: 1, title: "Investigar usuarios",
-    description: "Analizar necesidades y comportamientos de los usuarios del sistema.",
-    responsible: "Ana García", priority: "Alta", status: "Pendiente",
-    dueDate: "23/05/2025", startDate: "10/05/2025",
-    createdAt: "10/06/2025 10:30 a.m.", createdBy: "Juan Pérez",
-    updatedAt: "15/06/2025 04:45 p.m.", updatedBy: "María González",
-    comments: [
-      { id: 1, author: "Juan Pérez", avatar: "JP", text: "Completé la encuesta inicial con 20 participantes.", time: "Hoy, 10:15" },
-      { id: 2, author: "Ana García", avatar: "AG", text: "Revisando los resultados, parece que hay patrones interesantes.", time: "Hoy, 11:30" },
-    ],
-    evidence: ["Reporte_usuarios.pdf", "Encuesta_resultados.xlsx"],
-    checklist: ["Definir segmentos de usuarios", "Diseñar encuesta", "Aplicar entrevistas", "Analizar resultados"],
-  },
-  {
-    id: 2, title: "Definir alcance",
-    description: "Establecer el alcance del proyecto y los objetivos principales.",
-    responsible: "María González", priority: "Media", status: "En Proceso",
-    dueDate: "25/05/2025", startDate: "12/05/2025",
-    createdAt: "10/06/2025 09:00 a.m.", createdBy: "Juan Pérez",
-    updatedAt: "16/06/2025 02:00 p.m.", updatedBy: "María González",
-    comments: [], evidence: [],
-    checklist: ["Revisar requerimientos", "Reunión con stakeholders", "Documentar alcance"],
-  },
-  {
-    id: 3, title: "Diseño de interfaz",
-    description: "Crear prototipos y guías de estilo de la interfaz de usuario.",
-    responsible: "Carlos López", priority: "Alta", status: "En Revisión",
-    dueDate: "27/05/2025", startDate: "15/05/2025",
-    createdAt: "12/06/2025", createdBy: "Ana García",
-    updatedAt: "18/06/2025", updatedBy: "Carlos López",
-    comments: [
-      { id: 1, author: "Carlos López", avatar: "CL", text: "Wireframes v2 listos para revisión.", time: "Ayer, 18:00" },
-    ],
-    evidence: ["Wireframes_v2.fig", "Guia_estilos.pdf"],
-    checklist: ["Bocetos iniciales", "Wireframes de alta fidelidad", "Guía de estilos"],
-  },
-  {
-    id: 4, title: "Pruebas de usabilidad",
-    description: "Entregar resultados con usuarios y documentar observaciones.",
-    responsible: "Juan Pérez", priority: "Baja", status: "Completado",
-    dueDate: "30/05/2025", startDate: "20/05/2025",
-    createdAt: "14/06/2025", createdBy: "María González",
-    updatedAt: "20/06/2025", updatedBy: "Juan Pérez",
-    comments: [], evidence: ["Pruebas_informe.pdf"],
-    checklist: ["Definir escenarios", "Reclutar participantes", "Ejecutar pruebas", "Documentar hallazgos"],
-  },
-];
-
 const MOCK_ENTREGAS = [
   { id: 1, title: "Investigar usuarios", description: "Sub reporte de hallazgos y entrevistas.", status: "Pendiente", dueDate: "23/05/2025", format: "PDF / DOCX", evidence: [] },
   { id: 2, title: "Definir alcance", description: "Documentación y análisis del proyecto.", status: "En Revisión", dueDate: "25/05/2025", format: "PDF", evidence: ["alcance_v1.pdf"] },
@@ -189,8 +139,248 @@ export function ProyectosPage() {
   return <div className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm"><h2 className="font-bold text-gray-900 text-sm">Mis Proyectos</h2><p className="text-xs text-gray-400 mt-1">ClassBoard Equipo A - Activo</p></div>;
 }
 
+// ─── ACTIVIDADES (conectado a la API real) ──────────────────────────────────
+const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
+
+type Actividad = {
+  id: number;
+  nombre: string;
+  descripcion: string | null;
+  fecha_limite: string;
+  estado: "Pendiente" | "En Proceso" | "En Revisión" | "Completado";
+};
+
+function ActividadStatusIcon({ estado }: { estado: string }) {
+  if (estado === "Completado") return <CheckCircle2 size={16} className="text-green-500" />;
+  if (estado === "En Proceso") return <AlertCircle size={16} className="text-blue-500" />;
+  if (estado === "En Revisión") return <Clock size={16} className="text-amber-500" />;
+  return <Circle size={16} className="text-gray-300" />;
+}
+
+function ActividadCrearModal({ onClose, onCreated }: { onClose: () => void; onCreated: (a: Actividad) => void }) {
+  const [nombre, setNombre] = useState("");
+  const [descripcion, setDescripcion] = useState("");
+  const [fechaLimite, setFechaLimite] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    setError(null);
+
+    if (!nombre.trim()) {
+      setError("El nombre es obligatorio.");
+      return;
+    }
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaSeleccionada = new Date(fechaLimite);
+    if (!fechaLimite || fechaSeleccionada < hoy) {
+      setError("La fecha límite no puede ser anterior a hoy.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(API_ACTIVIDADES_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ nombre: nombre.trim(), descripcion: descripcion.trim(), fecha_limite: fechaLimite }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "No se pudo crear la actividad.");
+      onCreated(data.actividad);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Error de conexión con el servidor.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-md shadow-xl space-y-4 box-border" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Crear actividad</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-semibold p-2.5 rounded-xl text-center">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nombre de la actividad *</label>
+            <input
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              placeholder="Ej. Investigar metodologías ágiles"
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Descripción</label>
+            <textarea
+              value={descripcion}
+              onChange={e => setDescripcion(e.target.value)}
+              rows={3}
+              placeholder="Describe el objetivo y alcance de la actividad."
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 resize-none focus:outline-none focus:border-blue-400 transition-all box-border"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha límite *</label>
+            <input
+              type="date"
+              value={fechaLimite}
+              onChange={e => setFechaLimite(e.target.value)}
+              min={new Date().toISOString().split("T")[0]}
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-4 py-2 text-xs font-bold text-white bg-[#1a1d2e] hover:bg-[#11131f] rounded-xl transition-colors shadow-sm disabled:opacity-50"
+          >
+            {loading ? "Creando..." : "Crear actividad"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ActividadesPage() {
-  return <div className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm"><h2 className="font-bold text-gray-900 text-sm">Lista de Actividades</h2><p className="text-xs text-gray-400 mt-1">Gestiona las tareas de tu sprint</p></div>;
+  const [actividades, setActividades] = useState<Actividad[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("Todos");
+  const [modal, setModal] = useState(false);
+
+  useEffect(() => {
+    const fetchActividades = async () => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(API_ACTIVIDADES_URL, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (response.ok) setActividades(data.actividades);
+      } catch (err) {
+        console.error("Error al cargar actividades:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchActividades();
+  }, []);
+
+  const filtered = actividades.filter(a =>
+    (filterStatus === "Todos" || a.estado === filterStatus) &&
+    a.nombre.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const counts = {
+    total: actividades.length,
+    pendientes: actividades.filter(a => a.estado === "Pendiente").length,
+    enProceso: actividades.filter(a => a.estado === "En Proceso").length,
+    enRevision: actividades.filter(a => a.estado === "En Revisión").length,
+    completadas: actividades.filter(a => a.estado === "Completado").length,
+  };
+
+  return (
+    <div className="w-full max-w-full space-y-6 box-border">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Actividades</h1>
+          <p className="text-sm text-gray-400 font-medium mt-0.5">Gestiona tus actividades del proyecto</p>
+        </div>
+        <button
+          onClick={() => setModal(true)}
+          className="flex items-center justify-center gap-1.5 py-2.5 px-4 bg-[#1a1d2e] text-white rounded-xl text-xs font-bold hover:bg-[#11131f] transition-all shadow-sm"
+        >
+          <Plus size={14} /> Agregar actividad
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">
+        <StatCard label="Total" value={counts.total} color="bg-indigo-50 text-indigo-600" icon={<ListChecks size={20} />} />
+        <StatCard label="Pendientes" value={counts.pendientes} color="bg-gray-50 text-gray-400" icon={<Clock size={20} />} />
+        <StatCard label="En proceso" value={counts.enProceso} color="bg-blue-50 text-blue-600" icon={<AlertCircle size={20} />} />
+        <StatCard label="En revisión" value={counts.enRevision} color="bg-amber-50 text-amber-600" icon={<Eye size={20} />} />
+        <StatCard label="Completadas" value={counts.completadas} color="bg-green-50 text-green-600" icon={<CheckCircle2 size={20} />} />
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar actividad..."
+            className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40"
+          />
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {["Todos", "Pendiente", "En Proceso", "En Revisión", "Completado"].map(s => (
+            <button
+              key={s}
+              onClick={() => setFilterStatus(s)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === s ? "bg-[#1a1d2e] text-white" : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2.5">
+        {loading ? (
+          <div className="text-center py-8 text-xs text-gray-400 font-medium">Cargando actividades...</div>
+        ) : filtered.length === 0 ? (
+          <div className="text-center py-8 text-xs text-gray-400 font-medium border border-dashed border-gray-200 rounded-2xl bg-white/50">
+            No se encontraron actividades.
+          </div>
+        ) : (
+          filtered.map(a => (
+            <div key={a.id} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3 shadow-sm shadow-gray-100/40">
+              <div className="shrink-0"><ActividadStatusIcon estado={a.estado} /></div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-gray-800 truncate">{a.nombre}</p>
+                <p className="text-xs text-gray-400 font-medium">
+                  Fecha límite: {new Date(a.fecha_limite).toLocaleDateString("es-MX")}
+                </p>
+              </div>
+              <Badge label={a.estado} cls={statusBg(a.estado)} />
+            </div>
+          ))
+        )}
+      </div>
+
+      {modal && (
+        <ActividadCrearModal
+          onClose={() => setModal(false)}
+          onCreated={nueva => setActividades(prev => [nueva, ...prev])}
+        />
+      )}
+    </div>
+  );
 }
 
 export function EntregasPage() {

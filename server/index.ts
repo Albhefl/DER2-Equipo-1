@@ -2,7 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js'; // Importamos las rutas de login
-
+import actividadesRoutes from './routes/actividades.js'; // Importamos las rutas de actividades
 
 dotenv.config();
 
@@ -14,6 +14,9 @@ app.use(express.json()); // Permite al servidor leer formato JSON enviado desde 
 
 // Enlazamos las rutas de autenticación bajo el prefijo /api/auth
 app.use('/api/auth', authRoutes);
+
+// Enlazamos las rutas de actividades bajo el prefijo /api/actividades
+app.use('/api/actividades', actividadesRoutes);
 
 app.get('/', (req, res) => {
   res.send('¡El servidor de ClassBoard está vivo!');
