@@ -6,12 +6,12 @@ services:
     container_name: classboard_mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD:  " "
-      MYSQL_DATABASE: db_agenda_metas         # El nombre de tu base de datos MySQL
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"  
+      MYSQL_DATABASE: db_agenda_metas
     ports:
-      - "3306:3306"                           # Mapeamos el puerto nativo de MySQL
+      - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql             # Ruta correcta para guardar los datos de MySQL
+      - mysql_data:/var/lib/mysql
 
 volumes:
   mysql_data:
