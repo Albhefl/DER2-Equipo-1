@@ -265,12 +265,207 @@ function ActividadCrearModal({ onClose, onCreated }: { onClose: () => void; onCr
   );
 }
 
+// ─── MODAL DE EDICIÓN (HU-013 Escenario 1) ──────────────────────────────────
+function ActividadEditarModal({
+  actividad, onClose, onUpdated,
+}: {
+  actividad: Actividad;
+  onClose: () => void;
+  onUpdated: (a: Actividad) => void;
+}) {
+  const [nombre, setNombre] = useState(actividad.nombre);
+  const [descripcion, setDescripcion] = useState(actividad.descripcion || "");
+  const [fechaLimite, setFechaLimite] = useState(actividad.fecha_limite.split("T")[0]);
+  const [estado, setEstado] = useState(actividad.estado);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    setError(null);
+
+    if (!nombre.trim()) {
+      setError("El nombre es obligatorio.");
+      return;
+    }
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaSeleccionada = new Date(fechaLimite);
+    if (!fechaLimite || fechaSeleccionada < hoy) {
+      setError("La fecha límite no puede ser anterior a hoy.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ACTIVIDADES_URL}/${actividad.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ nombre: nombre.trim(), descripcion: descripcion.trim(), fecha_limite: fechaLimite, estado }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "No se pudo actualizar la actividad.");
+      onUpdated(data.actividad);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Error de conexión con el servidor.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-md shadow-xl space-y-4 box-border" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Editar actividad</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-semibold p-2.5 rounded-xl text-center">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Nombre de la actividad *</label>
+            <input
+              value={nombre}
+              onChange={e => setNombre(e.target.value)}
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Descripción</label>
+            <textarea
+              value={descripcion}
+              onChange={e => setDescripcion(e.target.value)}
+              rows={3}
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 resize-none focus:outline-none focus:border-blue-400 transition-all box-border"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha límite *</label>
+            <input
+              type="date"
+              value={fechaLimite}
+              onChange={e => setFechaLimite(e.target.value)}
+              min={new Date().toISOString().split("T")[0]}
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Estado</label>
+            <select
+              value={estado}
+              onChange={e => setEstado(e.target.value as Actividad["estado"])}
+              className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+            >
+              {["Pendiente", "En Proceso", "En Revisión", "Completado"].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="px-4 py-2 text-xs font-bold text-white bg-[#1a1d2e] hover:bg-[#11131f] rounded-xl transition-colors shadow-sm disabled:opacity-50"
+          >
+            {loading ? "Actualizando..." : "Actualizar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── DIÁLOGO DE CONFIRMACIÓN DE ELIMINACIÓN (HU-013 Escenario 2) ────────────
+function ActividadEliminarConfirm({
+  actividad, onClose, onDeleted,
+}: {
+  actividad: Actividad;
+  onClose: () => void;
+  onDeleted: (id: number) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleDelete = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ACTIVIDADES_URL}/${actividad.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "No se pudo eliminar la actividad.");
+      onDeleted(actividad.id);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "Error de conexión con el servidor.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 box-border" onClick={e => e.stopPropagation()}>
+        <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+          <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Eliminar actividad</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {error && (
+          <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-semibold p-2.5 rounded-xl text-center">
+            {error}
+          </div>
+        )}
+
+        <p className="text-sm text-gray-600">
+          ¿Estás segura de que quieres eliminar la actividad <span className="font-bold text-gray-900">"{actividad.nombre}"</span>? Esta acción no se puede deshacer.
+        </p>
+
+        <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={loading}
+            className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+          >
+            {loading ? "Eliminando..." : "Eliminar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ActividadesPage() {
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("Todos");
   const [modal, setModal] = useState(false);
+  const [editTarget, setEditTarget] = useState<Actividad | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Actividad | null>(null);
 
   useEffect(() => {
     const fetchActividades = async () => {
@@ -368,6 +563,22 @@ export function ActividadesPage() {
                 </p>
               </div>
               <Badge label={a.estado} cls={statusBg(a.estado)} />
+              <div className="flex gap-1 shrink-0">
+                <button
+                  onClick={() => setEditTarget(a)}
+                  className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-gray-50 transition-colors"
+                  title="Editar"
+                >
+                  <Edit2 size={14} />
+                </button>
+                <button
+                  onClick={() => setDeleteTarget(a)}
+                  className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-50 transition-colors"
+                  title="Eliminar"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
           ))
         )}
@@ -377,6 +588,22 @@ export function ActividadesPage() {
         <ActividadCrearModal
           onClose={() => setModal(false)}
           onCreated={nueva => setActividades(prev => [nueva, ...prev])}
+        />
+      )}
+
+      {editTarget && (
+        <ActividadEditarModal
+          actividad={editTarget}
+          onClose={() => setEditTarget(null)}
+          onUpdated={actualizada => setActividades(prev => prev.map(a => a.id === actualizada.id ? actualizada : a))}
+        />
+      )}
+
+      {deleteTarget && (
+        <ActividadEliminarConfirm
+          actividad={deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onDeleted={id => setActividades(prev => prev.filter(a => a.id !== id))}
         />
       )}
     </div>
