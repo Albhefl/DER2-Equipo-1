@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useNavigate } from 'react-router-dom'; // <-- 1. Importación agregada
+import { useNavigate } from 'react-router-dom';
 
 /**
  * 1. ESQUEMA DE VALIDACIÓN CON ZOD (Criterio HU-009.1)
@@ -20,7 +20,7 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export const Login: React.FC = () => {
-  const navigate = useNavigate(); // <-- 2. Inicialización del navegador
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
 
   // Estado local para capturar y mostrar errores controlados provenientes de la API (HU-009.2 / HU-010.3)
@@ -65,13 +65,14 @@ export const Login: React.FC = () => {
       // Si las credenciales son válidas, almacena el JSON Web Token de forma segura
       localStorage.setItem('token', resData.token);
 
-      // 🔀 3. REDIRECCIÓN INTELIGENTE BASADA EN ROLES (Corregido para MySQL con 'role' y MAYÚSCULAS)
-      // Buscamos 'role' (con e) y lo pasamos a minúsculas para comparar limpio
+      // 🔀 3. REDIRECCIÓN INTELIGENTE BASADA EN ROLES
+      // El backend (Prisma) devuelve el enum Role en inglés: 'STUDENT' | 'EVALUATOR'
+      // Lo pasamos a minúsculas para comparar limpio
       const userRole = (resData.user?.role || resData.role || "").toLowerCase().trim();
 
-      if (userRole === 'estudiante') {
+      if (userRole === 'student') {
         navigate('/estudiante-dashboard');
-      } else if (userRole === 'evaluador') {
+      } else if (userRole === 'evaluator') {
         navigate('/evaluador-dashboard');
       } else {
         throw new Error(`El usuario tiene el rol '${userRole}', el cual no es válido.`);

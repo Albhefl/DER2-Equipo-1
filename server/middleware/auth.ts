@@ -4,8 +4,9 @@ import jwt from 'jsonwebtoken';
 const JWT_SECRET = process.env.JWT_SECRET || 'llave_secreta_para_classboard_2026';
 
 // Extendemos el tipo Request para poder guardar los datos del usuario decodificado
+// userId es string porque Prisma usa UUIDs como id (no enteros autoincrementales como en MySQL)
 export interface AuthRequest extends Request {
-  user?: { userId: number; role: string };
+  user?: { userId: string; role: string };
 }
 
 export function verificarToken(req: AuthRequest, res: Response, next: NextFunction) {
@@ -22,7 +23,7 @@ export function verificarToken(req: AuthRequest, res: Response, next: NextFuncti
   }
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as unknown as { userId: number; role: string };
+    const decoded = jwt.verify(token, JWT_SECRET) as unknown as { userId: string; role: string };
     req.user = decoded;
     next();
   } catch (error) {

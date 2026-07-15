@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js'; // Importamos las rutas de login
 import actividadesRoutes from './routes/actividades.js'; // Importamos las rutas de actividades
-
+import db from './src/db.js'; // Importamos la conexión a la base de datos
 dotenv.config();
 
 const app = express();

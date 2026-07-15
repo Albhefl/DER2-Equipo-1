@@ -1,0 +1,113 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  EVALUATOR
+}
+
+enum Priority {
+  HIGH
+  MED
+  LOW
+}
+
+enum Status {
+  PENDING
+  IN_PROCESS
+  IN_REVIEW
+  DONE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  assignedActivities ActivityAssignee[]
+  comments           Comment[]
+  evidenceUploaded   Evidence[]
+  statusChanges      StatusHistory[]
+
+  @@map("users")
+}
+
+model Activity {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  deadline    DateTime?
+  priority    Priority  @default(MED)
+  status      Status    @default(PENDING)
+  projectId   String?   @map("project_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  assignees     ActivityAssignee[]
+  comments      Comment[]
+  evidence      Evidence[]
+  statusHistory StatusHistory[]
+
+  @@map("activities")
+}
+
+// Tabla pivote: relación many-to-many entre Activity y User
+model ActivityAssignee {
+  activityId String @map("activity_id")
+  userId     String @map("user_id")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, userId])
+  @@map("activity_assignees")
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  content    String
+  activityId String   @map("activity_id")
+  authorId   String   @map("author_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id])
+
+  @@map("comments")
+}
+
+model Evidence {
+  id         String   @id @default(uuid())
+  url        String
+  activityId String   @map("activity_id")
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  creator  User     @relation(fields: [createdBy], references: [id])
+
+  @@map("evidence")
+}
+
+model StatusHistory {
+  id         String   @id @default(uuid())
+  activityId String   @map("activity_id")
+  fromStatus Status?  @map("from_status")
+  toStatus   Status   @map("to_status")
+  changedBy  String   @map("changed_by")
+  changedAt  DateTime @default(now()) @map("changed_at")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  changer  User     @relation(fields: [changedBy], references: [id])
+
+  @@map("status_history")
+}

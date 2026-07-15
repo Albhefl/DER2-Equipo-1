@@ -1,99 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
-} from "recharts";
-import {
-  Eye, EyeOff, Search, Plus, Edit2, ChevronLeft, ChevronRight,
-  Upload, X, LayoutDashboard, FolderOpen, ListChecks, Package,
-  CalendarDays, User, LogOut, Send, CheckCircle2, Circle,
-  Users, Paperclip, MessageSquare, LayoutGrid, ArrowLeft, Mail, Phone, Building, Clock,
-  AlertCircle, CheckSquare, Trash2, Link,
+  Eye, Search, Plus, Edit2, ListChecks,
+  CheckCircle2, Circle,
+  AlertCircle, Trash2, X, Clock,
 } from "lucide-react";
 
-// ─── MOCK DATA ────────────────────────────────────────────────────────────────
-const MOCK_ENTREGAS = [
-  { id: 1, title: "Investigar usuarios", description: "Sub reporte de hallazgos y entrevistas.", status: "Pendiente", dueDate: "23/05/2025", format: "PDF / DOCX", evidence: [] },
-  { id: 2, title: "Definir alcance", description: "Documentación y análisis del proyecto.", status: "En Revisión", dueDate: "25/05/2025", format: "PDF", evidence: ["alcance_v1.pdf"] },
-  { id: 3, title: "Diseño de interfaz", description: "Prototipos de alta fidelidad.", status: "Aprobado", dueDate: "27/05/2025", format: "PDF / IMG", evidence: ["diseno_final.pdf", "mockups.png"] },
-  { id: 4, title: "Pruebas de usabilidad", description: "Entregar resultados con usuarios.", status: "Completada", dueDate: "30/05/2025", format: "PDF / DOCX", evidence: [] },
-];
-
-const KANBAN_COLUMNS = ["Pendiente", "En Proceso", "En Revisión", "Completado"];
-const KANBAN_INIT = {
-  "Pendiente": [
-    { id: 1, title: "Investigar usuarios", responsible: "Ana García", priority: "Alta", dueDate: "23/05/2025" },
-    { id: 5, title: "Reunión de equipo", responsible: "Juan Pérez", priority: "Media", dueDate: "22/05/2025" },
-  ],
-  "En Proceso": [
-    { id: 2, title: "Definir alcance", responsible: "María González", priority: "Media", dueDate: "25/05/2025" },
-    { id: 6, title: "Documentar API", responsible: "Carlos López", priority: "Alta", dueDate: "26/05/2025" },
-    { id: 7, title: "Configurar entorno", responsible: "Ana García", priority: "Baja", dueDate: "20/05/2025" },
-  ],
-  "En Revisión": [
-    { id: 3, title: "Diseño de interfaz", responsible: "Carlos López", priority: "Alta", dueDate: "27/05/2025" },
-  ],
-  "Completado": [
-    { id: 4, title: "Pruebas de usabilidad", responsible: "Juan Pérez", priority: "Baja", dueDate: "30/05/2025" },
-    { id: 8, title: "Análisis inicial", responsible: "María González", priority: "Media", dueDate: "15/05/2025" },
-  ],
-};
-
-const CHART_DATA = [
-  { name: "Pendientes", value: 7 },
-  { name: "En Proceso", value: 8 },
-  { name: "En Revisión", value: 4 },
-  { name: "Completados", value: 5 },
-];
-const CHART_COLORS = ["#94a3b8", "#3b82f6", "#f59e0b", "#22c55e"];
-
-const UPCOMING_ACTIVITIES = [
-  { title: "Realizar pruebas de usabilidad", date: "22/05/2025" },
-  { title: "Documentar resultados", date: "24/05/2025" },
-  { title: "Preparar presentación final", date: "27/05/2025" },
-];
-
-const RECENT_LOG = [
-  { action: "Completaste 'Investigar usuarios'", time: "Hoy, 10:15" },
-  { action: "Actualizaste 'Definir alcance'", time: "Hoy, 09:40" },
-  { action: "'Diseño de la interfaz' en revisión", time: "Ayer, 18:00" },
-  { action: "Nueva actividad agregada: 'Pruebas'", time: "Ayer, 16:20" },
-];
-
-const CALENDAR_EVENTS: Record<number, { title: string; type: "reunion" | "entrega" | "actividad" }[]> = {
-  3: [{ title: "Reunión de avance", type: "reunion" }],
-  10: [{ title: "Entrega prueba", type: "entrega" }],
-  12: [{ title: "Diseño de interfaz", type: "actividad" }],
-  17: [{ title: "Revisión con equipo", type: "reunion" }],
-  24: [{ title: "Entrega final", type: "entrega" }],
-  27: [{ title: "Diseño de etapa", type: "actividad" }],
-};
-
-const UPCOMING_EVENTS = [
-  { title: "Definir alcance", date: "17/06/2025", days: "En 2 días" },
-  { title: "Diseño de interfaz", date: "20/06/2025", days: "En 5 días" },
-  { title: "Revisión con equipo", date: "24/06/2025", days: "En 9 días" },
-  { title: "Entrega wireframes", date: "27/06/2025", days: "En 12 días" },
-];
-
-const MOCK_PROJECTS = [
-  {
-    id: 1, name: "ClassBoard Equipo A", description: "Diseño del sistema académico",
-    team: 5, status: "Activo", progress: 67, startDate: "01/05/2025", endDate: "30/06/2025", priority: "Alta", docente: "Dr. Roberto García", entregaFinal: "30/06/2025",
-    members: [
-      { name: "Ana García Pérez", email: "ana@universidad.edu", role: "Líder" },
-      { name: "Juan Pérez López", email: "juan@universidad.edu", role: "Desarrollador" },
-    ],
-    evaluators: []
-  }
-];
-
 // Helpers estáticos de estilos
-function statusBg(status: string) {
-  if (status === "Pendiente") return "bg-gray-100 text-gray-600";
-  if (status === "En Proceso") return "bg-blue-100 text-blue-700";
-  if (status === "En Revisión") return "bg-amber-100 text-amber-700";
-  return "bg-green-100 text-green-700";
-}
 function priorityBg(p: string) {
   if (p === "Alta") return "bg-red-100 text-red-700";
   if (p === "Media") return "bg-amber-100 text-amber-700";
@@ -139,22 +51,42 @@ export function ProyectosPage() {
   return <div className="p-4 bg-white border border-gray-100 rounded-2xl shadow-sm"><h2 className="font-bold text-gray-900 text-sm">Mis Proyectos</h2><p className="text-xs text-gray-400 mt-1">ClassBoard Equipo A - Activo</p></div>;
 }
 
-// ─── ACTIVIDADES (conectado a la API real) ──────────────────────────────────
+// ─── ACTIVIDADES (conectado a la API real — Prisma / PostgreSQL) ───────────
 const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
 
-type Actividad = {
-  id: number;
-  nombre: string;
-  descripcion: string | null;
-  fecha_limite: string;
-  estado: "Pendiente" | "En Proceso" | "En Revisión" | "Completado";
+// El backend (Prisma) usa nombres de campo y enums en inglés.
+// Estos mapeos traducen esos valores a las etiquetas en español que ve el usuario.
+type EstadoActividad = "PENDING" | "IN_PROCESS" | "IN_REVIEW" | "DONE";
+
+const ESTADOS: EstadoActividad[] = ["PENDING", "IN_PROCESS", "IN_REVIEW", "DONE"];
+
+const ESTADO_LABELS: Record<EstadoActividad, string> = {
+  PENDING: "Pendiente",
+  IN_PROCESS: "En Proceso",
+  IN_REVIEW: "En Revisión",
+  DONE: "Completada",
 };
 
-function ActividadStatusIcon({ estado }: { estado: string }) {
-  if (estado === "Completado") return <CheckCircle2 size={16} className="text-green-500" />;
-  if (estado === "En Proceso") return <AlertCircle size={16} className="text-blue-500" />;
-  if (estado === "En Revisión") return <Clock size={16} className="text-amber-500" />;
-  return <Circle size={16} className="text-gray-300" />;
+function statusBg(estado: EstadoActividad) {
+  if (estado === "PENDING") return "bg-gray-100 text-gray-600";
+  if (estado === "IN_PROCESS") return "bg-blue-100 text-blue-700";
+  if (estado === "IN_REVIEW") return "bg-amber-100 text-amber-700";
+  return "bg-green-100 text-green-700"; // DONE
+}
+
+type Actividad = {
+  id: string; // UUID generado por Prisma, no un entero autoincremental
+  name: string;
+  description: string | null;
+  deadline: string;
+  status: EstadoActividad;
+};
+
+function ActividadStatusIcon({ status }: { status: EstadoActividad }) {
+  if (status === "DONE") return <CheckCircle2 size={16} className="text-green-500" />;
+  if (status === "IN_PROCESS") return <AlertCircle size={16} className="text-blue-500" />;
+  if (status === "IN_REVIEW") return <Clock size={16} className="text-amber-500" />;
+  return <Circle size={16} className="text-gray-300" />; // PENDING
 }
 
 function ActividadCrearModal({ onClose, onCreated }: { onClose: () => void; onCreated: (a: Actividad) => void }) {
@@ -183,6 +115,8 @@ function ActividadCrearModal({ onClose, onCreated }: { onClose: () => void; onCr
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
+      // El backend recibe el body con nombres en español (nombre, descripcion, fecha_limite)
+      // pero devuelve la actividad creada con los nombres del schema de Prisma (name, description, deadline...)
       const response = await fetch(API_ACTIVIDADES_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -273,10 +207,10 @@ function ActividadEditarModal({
   onClose: () => void;
   onUpdated: (a: Actividad) => void;
 }) {
-  const [nombre, setNombre] = useState(actividad.nombre);
-  const [descripcion, setDescripcion] = useState(actividad.descripcion || "");
-  const [fechaLimite, setFechaLimite] = useState(actividad.fecha_limite.split("T")[0]);
-  const [estado, setEstado] = useState(actividad.estado);
+  const [nombre, setNombre] = useState(actividad.name);
+  const [descripcion, setDescripcion] = useState(actividad.description || "");
+  const [fechaLimite, setFechaLimite] = useState(actividad.deadline.split("T")[0]);
+  const [estado, setEstado] = useState<EstadoActividad>(actividad.status);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -363,10 +297,10 @@ function ActividadEditarModal({
             <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Estado</label>
             <select
               value={estado}
-              onChange={e => setEstado(e.target.value as Actividad["estado"])}
+              onChange={e => setEstado(e.target.value as EstadoActividad)}
               className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
             >
-              {["Pendiente", "En Proceso", "En Revisión", "Completado"].map(s => <option key={s}>{s}</option>)}
+              {ESTADOS.map(s => <option key={s} value={s}>{ESTADO_LABELS[s]}</option>)}
             </select>
           </div>
         </div>
@@ -395,7 +329,7 @@ function ActividadEliminarConfirm({
 }: {
   actividad: Actividad;
   onClose: () => void;
-  onDeleted: (id: number) => void;
+  onDeleted: (id: string) => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -437,7 +371,7 @@ function ActividadEliminarConfirm({
         )}
 
         <p className="text-sm text-gray-600">
-          ¿Estás segura de que quieres eliminar la actividad <span className="font-bold text-gray-900">"{actividad.nombre}"</span>? Esta acción no se puede deshacer.
+          ¿Estás segura de que quieres eliminar la actividad <span className="font-bold text-gray-900">"{actividad.name}"</span>? Esta acción no se puede deshacer.
         </p>
 
         <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
@@ -462,7 +396,7 @@ export function ActividadesPage() {
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("Todos");
+  const [filterStatus, setFilterStatus] = useState<"Todos" | EstadoActividad>("Todos");
   const [modal, setModal] = useState(false);
   const [editTarget, setEditTarget] = useState<Actividad | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Actividad | null>(null);
@@ -487,16 +421,16 @@ export function ActividadesPage() {
   }, []);
 
   const filtered = actividades.filter(a =>
-    (filterStatus === "Todos" || a.estado === filterStatus) &&
-    a.nombre.toLowerCase().includes(search.toLowerCase())
+    (filterStatus === "Todos" || a.status === filterStatus) &&
+    a.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const counts = {
     total: actividades.length,
-    pendientes: actividades.filter(a => a.estado === "Pendiente").length,
-    enProceso: actividades.filter(a => a.estado === "En Proceso").length,
-    enRevision: actividades.filter(a => a.estado === "En Revisión").length,
-    completadas: actividades.filter(a => a.estado === "Completado").length,
+    pendientes: actividades.filter(a => a.status === "PENDING").length,
+    enProceso: actividades.filter(a => a.status === "IN_PROCESS").length,
+    enRevision: actividades.filter(a => a.status === "IN_REVIEW").length,
+    completadas: actividades.filter(a => a.status === "DONE").length,
   };
 
   return (
@@ -533,13 +467,13 @@ export function ActividadesPage() {
           />
         </div>
         <div className="flex flex-wrap gap-2">
-          {["Todos", "Pendiente", "En Proceso", "En Revisión", "Completado"].map(s => (
+          {(["Todos", ...ESTADOS] as const).map(s => (
             <button
               key={s}
               onClick={() => setFilterStatus(s)}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${filterStatus === s ? "bg-[#1a1d2e] text-white" : "bg-white border border-gray-200 text-gray-500 hover:bg-gray-50"}`}
             >
-              {s}
+              {s === "Todos" ? "Todos" : ESTADO_LABELS[s]}
             </button>
           ))}
         </div>
@@ -555,14 +489,14 @@ export function ActividadesPage() {
         ) : (
           filtered.map(a => (
             <div key={a.id} className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3 shadow-sm shadow-gray-100/40">
-              <div className="shrink-0"><ActividadStatusIcon estado={a.estado} /></div>
+              <div className="shrink-0"><ActividadStatusIcon status={a.status} /></div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-gray-800 truncate">{a.nombre}</p>
+                <p className="text-sm font-bold text-gray-800 truncate">{a.name}</p>
                 <p className="text-xs text-gray-400 font-medium">
-                  Fecha límite: {new Date(a.fecha_limite).toLocaleDateString("es-MX")}
+                  Fecha límite: {new Date(a.deadline).toLocaleDateString("es-MX")}
                 </p>
               </div>
-              <Badge label={a.estado} cls={statusBg(a.estado)} />
+              <Badge label={ESTADO_LABELS[a.status]} cls={statusBg(a.status)} />
               <div className="flex gap-1 shrink-0">
                 <button
                   onClick={() => setEditTarget(a)}
