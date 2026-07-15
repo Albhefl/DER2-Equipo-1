@@ -1,16 +1,24 @@
 import { Router, type Response } from 'express';
-import db from '../db.js';
+import db from '../src/db.js'; // Cliente de Prisma (Postgres)
 import { verificarToken, type AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
+const VALID_STATUSES = ['PENDING', 'IN_PROCESS', 'IN_REVIEW', 'DONE'];
+const VALID_PRIORITIES = ['HIGH', 'MED', 'LOW'];
+
 /**
  * ENDPOINT: POST /api/actividades
- * Crea una nueva actividad para el estudiante autenticado
+ * Crea una nueva actividad y asigna automáticamente al usuario autenticado
+ * como responsable (relación activity_assignees).
  */
 router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
-  const { nombre, descripcion, fecha_limite } = req.body;
+  const { nombre, descripcion, fecha_limite, prioridad } = req.body;
   const usuario_id = req.user?.userId;
+
+  if (!usuario_id) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
 
   try {
     if (!nombre || nombre.trim() === '') {
@@ -29,21 +37,29 @@ router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promis
       return res.status(400).json({ message: 'La fecha límite no puede ser anterior a hoy.' });
     }
 
-    const [result]: any = await db.query(
-      'INSERT INTO actividades (nombre, descripcion, fecha_limite, usuario_id) VALUES (?, ?, ?, ?)',
-      [nombre.trim(), descripcion?.trim() || null, fecha_limite, usuario_id]
-    );
+    const prioridadUpper = prioridad ? String(prioridad).toUpperCase() : 'MED';
+    if (!VALID_PRIORITIES.includes(prioridadUpper)) {
+      return res.status(400).json({
+        message: `Prioridad inválida. Debe ser una de: ${VALID_PRIORITIES.join(', ')}`
+      });
+    }
+
+    const actividad = await db.activity.create({
+      data: {
+        name: nombre.trim(),
+        description: descripcion?.trim() || null,
+        deadline: fechaSeleccionada,
+        priority: prioridadUpper as 'HIGH' | 'MED' | 'LOW',
+        status: 'PENDING',
+        assignees: {
+          create: [{ userId: usuario_id }],
+        },
+      },
+    });
 
     return res.status(201).json({
       message: 'Actividad creada exitosamente.',
-      actividad: {
-        id: result.insertId,
-        nombre: nombre.trim(),
-        descripcion: descripcion?.trim() || null,
-        fecha_limite,
-        estado: 'Pendiente',
-        usuario_id
-      }
+      actividad,
     });
 
   } catch (error) {
@@ -54,17 +70,26 @@ router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promis
 
 /**
  * ENDPOINT: GET /api/actividades
- * Lista todas las actividades del estudiante autenticado
+ * Lista todas las actividades donde el usuario autenticado es responsable
  */
 router.get('/', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const usuario_id = req.user?.userId;
 
+  if (!usuario_id) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
+
   try {
-    const [rows] = await db.query(
-      'SELECT * FROM actividades WHERE usuario_id = ? ORDER BY created_at DESC',
-      [usuario_id]
-    );
-    return res.status(200).json({ actividades: rows });
+    const actividades = await db.activity.findMany({
+      where: {
+        assignees: {
+          some: { userId: usuario_id },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.status(200).json({ actividades });
   } catch (error) {
     console.error('Error al obtener actividades:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
@@ -82,14 +107,24 @@ router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Prom
   const { nombre, descripcion, fecha_limite, estado } = req.body;
   const usuario_id = req.user?.userId;
 
-  try {
-    // Verifica que la actividad exista y le pertenezca al usuario autenticado
-    const [rows]: any = await db.query(
-      'SELECT * FROM actividades WHERE id = ? AND usuario_id = ?',
-      [id, usuario_id]
-    );
+  if (!id) {
+    return res.status(400).json({ message: 'ID de actividad requerido.' });
+  }
 
-    if (!rows || rows.length === 0) {
+  if (!usuario_id) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
+
+  try {
+    // Verifica que la actividad exista y el usuario sea uno de los responsables
+    const actividadExistente = await db.activity.findFirst({
+      where: {
+        id,
+        assignees: { some: { userId: usuario_id } },
+      },
+    });
+
+    if (!actividadExistente) {
       return res.status(404).json({ message: 'Actividad no encontrada.' });
     }
 
@@ -109,21 +144,26 @@ router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Prom
       return res.status(400).json({ message: 'La fecha límite no puede ser anterior a hoy.' });
     }
 
-    await db.query(
-      'UPDATE actividades SET nombre = ?, descripcion = ?, fecha_limite = ?, estado = ? WHERE id = ? AND usuario_id = ?',
-      [nombre.trim(), descripcion?.trim() || null, fecha_limite, estado || rows[0].estado, id, usuario_id]
-    );
+    const estadoUpper = estado ? String(estado).toUpperCase() : actividadExistente.status;
+    if (!VALID_STATUSES.includes(estadoUpper)) {
+      return res.status(400).json({
+        message: `Estado inválido. Debe ser uno de: ${VALID_STATUSES.join(', ')}`
+      });
+    }
+
+    const actividadActualizada = await db.activity.update({
+      where: { id },
+      data: {
+        name: nombre.trim(),
+        description: descripcion?.trim() || null,
+        deadline: fechaSeleccionada,
+        status: estadoUpper as 'PENDING' | 'IN_PROCESS' | 'IN_REVIEW' | 'DONE',
+      },
+    });
 
     return res.status(200).json({
       message: 'Actividad actualizada exitosamente.',
-      actividad: {
-        id: Number(id),
-        nombre: nombre.trim(),
-        descripcion: descripcion?.trim() || null,
-        fecha_limite,
-        estado: estado || rows[0].estado,
-        usuario_id
-      }
+      actividad: actividadActualizada,
     });
 
   } catch (error) {
@@ -142,20 +182,28 @@ router.delete('/:id', verificarToken, async (req: AuthRequest, res: Response): P
   const { id } = req.params;
   const usuario_id = req.user?.userId;
 
-  try {
-    const [rows]: any = await db.query(
-      'SELECT * FROM actividades WHERE id = ? AND usuario_id = ?',
-      [id, usuario_id]
-    );
+  if (!id) {
+    return res.status(400).json({ message: 'ID de actividad requerido.' });
+  }
 
-    if (!rows || rows.length === 0) {
+  if (!usuario_id) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
+
+  try {
+    const actividadExistente = await db.activity.findFirst({
+      where: {
+        id,
+        assignees: { some: { userId: usuario_id } },
+      },
+    });
+
+    if (!actividadExistente) {
       return res.status(404).json({ message: 'Actividad no encontrada.' });
     }
 
-    await db.query(
-      'DELETE FROM actividades WHERE id = ? AND usuario_id = ?',
-      [id, usuario_id]
-    );
+    // onDelete: Cascade en el schema borra también sus activity_assignees, comments, evidence, status_history
+    await db.activity.delete({ where: { id } });
 
     return res.status(200).json({ message: 'Actividad eliminada exitosamente.' });
 

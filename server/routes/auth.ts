@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
-import db from '../db.js';
+import db from '../src/db.js'; // Cliente de Prisma (Postgres)
 
 const router = Router();
 
@@ -20,30 +20,42 @@ const loginLimiter = rateLimit({
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || 'llave_secreta_para_classboard_2026';
+const VALID_ROLES = ['STUDENT', 'EVALUATOR'];
 
 /**
  * =========================================================================
- * 1. ENDPOINT: POST /api/auth/register 
+ * 1. ENDPOINT: POST /api/auth/register
  * Registra usuarios encriptando la contraseña automáticamente
  * =========================================================================
  */
 router.post('/register', async (req: Request, res: Response): Promise<any> => {
-  const { nombre, email, password, role } = req.body;
+  const { name, email, password, role } = req.body;
 
   try {
-    if (!nombre || !email || !password || !role) {
+    if (!name || !email || !password || !role) {
       return res.status(400).json({ message: 'Todos los campos son obligatorios.' });
+    }
+
+    const roleUpper = String(role).toUpperCase();
+    if (!VALID_ROLES.includes(roleUpper)) {
+      return res.status(400).json({
+        message: `Rol inválido. Debe ser uno de: ${VALID_ROLES.join(', ')}`
+      });
     }
 
     // 🔐 ENCRIPTACIÓN AUTOMÁTICA
     const salt = await bcrypt.genSalt(10);
-    const passwordEncriptada = await bcrypt.hash(password, salt);
+    const passwordHash = await bcrypt.hash(password, salt);
 
-    // Guardar limpio en MySQL
-    await db.query(
-      'INSERT INTO usuarios (nombre, email, password, role) VALUES (?, ?, ?, ?)',
-      [nombre.trim(), email.trim(), passwordEncriptada, role.toUpperCase()]
-    );
+    // Guardar en PostgreSQL vía Prisma
+    await db.user.create({
+      data: {
+        name: name.trim(),
+        email: email.trim(),
+        passwordHash,
+        role: roleUpper as 'STUDENT' | 'EVALUATOR',
+      },
+    });
 
     return res.status(201).json({
       message: '¡Usuario registrado exitosamente con contraseña encriptada automáticamente! 🎉'
@@ -51,7 +63,8 @@ router.post('/register', async (req: Request, res: Response): Promise<any> => {
 
   } catch (error: any) {
     console.error('Error al registrar usuario:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
+    // P2002 = violación de restricción única en Prisma (ej. email duplicado)
+    if (error.code === 'P2002') {
       return res.status(400).json({ message: 'El correo electrónico ya está registrado.' });
     }
     return res.status(500).json({ message: 'Error interno en el servidor.' });
@@ -61,7 +74,7 @@ router.post('/register', async (req: Request, res: Response): Promise<any> => {
 /**
  * =========================================================================
  * 2. ENDPOINT: POST /api/auth/login
- * Autenticación conectada a MySQL con protección de Fuerza Bruta
+ * Autenticación conectada a PostgreSQL (Prisma) con protección de Fuerza Bruta
  * =========================================================================
  */
 router.post('/login', loginLimiter, async (req: Request, res: Response): Promise<any> => {
@@ -73,17 +86,16 @@ router.post('/login', loginLimiter, async (req: Request, res: Response): Promise
       return res.status(400).json({ message: 'Por favor, rellena todos los campos.' });
     }
 
-    // Buscar en la tabla de XAMPP
-    const [rows]: any = await db.query('SELECT * FROM usuarios WHERE email = ?', [email.trim()]);
+    const user = await db.user.findUnique({
+      where: { email: email.trim() },
+    });
 
-    if (!rows || rows.length === 0) {
+    if (!user) {
       return res.status(401).json({ message: 'Credenciales incorrectas. Intenta de nuevo.' });
     }
 
-    const user = rows[0];
-
     // Comparar clave plano vs hash seguro
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       return res.status(401).json({ message: 'Credenciales incorrectas. Intenta de nuevo.' });
     }
@@ -99,7 +111,7 @@ router.post('/login', loginLimiter, async (req: Request, res: Response): Promise
       message: 'Inicio de sesión exitoso.',
       token,
       user: {
-        name: user.nombre,
+        name: user.name,
         email: user.email,
         role: user.role
       }
