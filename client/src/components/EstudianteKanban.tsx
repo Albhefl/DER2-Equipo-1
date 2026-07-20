@@ -47,12 +47,48 @@ function priorityBg(p?: PrioridadActividad) {
   return "bg-amber-50 text-amber-600 border border-amber-100"; // MED o sin definir
 }
 
+// ── HU-017: indicador visual de vencimiento en tarjetas ──
+// Escenario 1: > 5 días restantes  -> verde
+// Escenario 2: entre 1 y 5 días restantes -> naranja
+//   (una actividad que vence justo HOY, 0 días, se trata también como naranja:
+//   los criterios no cubren ese punto exacto, pero aún no está "vencida" y ya
+//   no cabe en "más de 5 días", así que es la lectura más razonable)
+// Escenario 3: fecha límite ya pasada y la actividad no está completada -> rojo + "Vencida"
+// Las actividades en la columna "Completado" no se marcan como vencidas ni se
+// colorean por urgencia: ya no tiene sentido avisar que una tarea terminada "vence".
+type VencimientoColor = "verde" | "naranja" | "rojo" | "neutral";
+
+function calcularVencimiento(deadline: string, status: EstadoActividad): { color: VencimientoColor; vencida: boolean } {
+  if (status === "DONE") return { color: "neutral", vencida: false };
+
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  const fechaLimite = new Date(deadline);
+  fechaLimite.setHours(0, 0, 0, 0);
+
+  const msPorDia = 1000 * 60 * 60 * 24;
+  const diasRestantes = Math.round((fechaLimite.getTime() - hoy.getTime()) / msPorDia);
+
+  if (diasRestantes < 0) return { color: "rojo", vencida: true };
+  if (diasRestantes <= 5) return { color: "naranja", vencida: false };
+  return { color: "verde", vencida: false };
+}
+
+function vencimientoEstilos(color: VencimientoColor) {
+  switch (color) {
+    case "verde": return { text: "text-green-600", dot: "bg-green-500" };
+    case "naranja": return { text: "text-amber-600", dot: "bg-amber-500" };
+    case "rojo": return { text: "text-red-600", dot: "bg-red-500" };
+    default: return { text: "text-gray-400", dot: "bg-gray-300" };
+  }
+}
+
 function columnStyle(estado: EstadoActividad) {
   switch (estado) {
-    case "PENDING": return { border: "border-gray-200", header: "bg-gray-50/75 text-gray-700", dot: "bg-gray-400" };
-    case "IN_PROCESS": return { border: "border-blue-100", header: "bg-blue-50/60 text-blue-700", dot: "bg-blue-500" };
-    case "IN_REVIEW": return { border: "border-amber-100", header: "bg-amber-50/60 text-amber-700", dot: "bg-amber-500" };
-    case "DONE": return { border: "border-green-100", header: "bg-green-50/60 text-green-700", dot: "bg-green-500" };
+    case "PENDING": return { border: "border-gray-200", header: "bg-gray-50/75 text-slate-400", dot: "bg-slate-400" };
+    case "IN_PROCESS": return { border: "border-blue-100", header: "bg-blue-50/60 text-blue-500", dot: "bg-blue-500" };
+    case "IN_REVIEW": return { border: "border-amber-100", header: "bg-amber-50/60 text-amber-500", dot: "bg-amber-500" };
+    case "DONE": return { border: "border-green-100", header: "bg-green-50/60 text-green-500", dot: "bg-green-500" };
   }
 }
 
@@ -240,7 +276,7 @@ export const EstudianteKanban: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tablero Kanban</h1>
-          <p className="text-sm text-gray-400 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
+          <p className="text-sm text-gray-500 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <div className="relative w-full sm:w-48">
@@ -311,8 +347,11 @@ export const EstudianteKanban: React.FC = () => {
                   </div>
 
                   {/* CUERPO DE TARJETAS */}
-                  <div className="p-3 flex flex-col gap-3 min-h-[150px] max-h-[500px] overflow-y-auto bg-gray-50/30">
-                    {filteredCards.map(card => (
+                  <div className="p-3 flex flex-col gap-3 min-h-37.5 max-h-125 overflow-y-auto bg-gray-50/30">
+                    {filteredCards.map(card => {
+                      const venc = calcularVencimiento(card.deadline, card.status);
+                      const estilosVenc = vencimientoEstilos(venc.color);
+                      return (
                       <div key={card.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-all group space-y-3">
                         <div className="flex items-start justify-between gap-2">
                           <p className="text-xs font-bold text-gray-800 leading-snug flex-1">{card.name}</p>
@@ -345,11 +384,21 @@ export const EstudianteKanban: React.FC = () => {
                             {PRIORIDAD_LABELS[card.priority || "MED"]}
                           </span>
                         </div>
-                        <div className="text-[10px] text-gray-400 font-bold tracking-tight pt-1 border-t border-gray-50 flex items-center gap-1">
-                          <Clock size={10} /> {new Date(card.deadline).toLocaleDateString("es-MX")}
+
+                        {/* HU-017: indicador de color por proximidad a la fecha límite */}
+                        <div className={`flex items-center gap-1.5 pt-1 border-t border-gray-50 text-[10px] font-bold tracking-tight ${estilosVenc.text}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${estilosVenc.dot}`} />
+                          <Clock size={10} className="shrink-0" />
+                          {new Date(card.deadline).toLocaleDateString("es-MX")}
+                          {venc.vencida && (
+                            <span className="ml-auto px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold uppercase tracking-wide shrink-0">
+                              Vencida
+                            </span>
+                          )}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
 
                     {filteredCards.length === 0 && (
                       <div className="text-center py-6 text-[11px] text-gray-400 font-medium border border-dashed border-gray-200 rounded-xl bg-white/50">
@@ -469,7 +518,7 @@ export const EstudianteKanban: React.FC = () => {
 
             <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
               <button type="button" onClick={closeEdit} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">Cancelar</button>
-              <button type="button" onClick={saveEdit} disabled={guardando} className="px-4 py-2 text-xs font-bold text-white bg-[#1a1d2e] hover:bg-[#11131f] rounded-xl transition-colors shadow-sm disabled:opacity-50">
+              <button type="button" onClick={saveEdit} disabled={guardando} className="px-4 py-2 text-xs font-bold text-white bg-[#0B1026] hover:bg-[#060916] rounded-xl transition-colors shadow-sm disabled:opacity-50">
                 {guardando ? "Guardando..." : "Guardar"}
               </button>
             </div>
