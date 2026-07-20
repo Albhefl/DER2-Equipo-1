@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Edit2, X, Clock, UserPlus } from 'lucide-react';
+import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown } from 'lucide-react';
 
 // ─── CONEXIÓN A LA API REAL (sin datos simulados) ───────────────────────────
 const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
@@ -116,6 +116,10 @@ export const EstudianteKanban: React.FC = () => {
 
   // ── HU-016: filtrado del tablero por responsable ──
   const [filtroResponsable, setFiltroResponsable] = useState("");
+
+  // ── HU-018: ordenamiento del tablero por fecha límite ──
+  type OrdenFecha = "" | "asc" | "desc";
+  const [ordenFecha, setOrdenFecha] = useState<OrdenFecha>("");
 
   const [editModal, setEditModal] = useState<Actividad | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
@@ -302,6 +306,20 @@ export const EstudianteKanban: React.FC = () => {
             </select>
           </div>
 
+          {/* HU-018: ordenamiento del tablero por fecha límite */}
+          <div className="relative w-full sm:w-52">
+            <ArrowUpDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <select
+              value={ordenFecha}
+              onChange={e => setOrdenFecha(e.target.value as OrdenFecha)}
+              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40 cursor-pointer"
+            >
+              <option value="">Sin ordenar</option>
+              <option value="asc">Fecha: más próxima primero</option>
+              <option value="desc">Fecha: más lejana primero</option>
+            </select>
+          </div>
+
           {/* HU-016.2: limpiar filtro y restaurar vista completa, sin recargar */}
           {filtroResponsable && (
             <button
@@ -329,11 +347,20 @@ export const EstudianteKanban: React.FC = () => {
               const style = columnStyle(estado);
               // HU-016 escenario 1: el filtro de responsable aplica en TODAS las columnas a la vez,
               // combinado (AND) con la búsqueda por título que ya existía.
-              const filteredCards = actividades.filter(a =>
-                a.status === estado &&
-                a.name.toLowerCase().includes(search.toLowerCase()) &&
-                (!filtroResponsable || a.assignees.some(r => r.user.id === filtroResponsable))
-              );
+              const filteredCards = actividades
+                .filter(a =>
+                  a.status === estado &&
+                  a.name.toLowerCase().includes(search.toLowerCase()) &&
+                  (!filtroResponsable || a.assignees.some(r => r.user.id === filtroResponsable))
+                )
+                // HU-018: ordena dentro de cada columna por fecha límite.
+                // ordenFecha === "" deja el orden tal como llega de la API (sin ordenar).
+                .sort((a, b) => {
+                  if (!ordenFecha) return 0;
+                  const fechaA = new Date(a.deadline).getTime();
+                  const fechaB = new Date(b.deadline).getTime();
+                  return ordenFecha === "asc" ? fechaA - fechaB : fechaB - fechaA;
+                });
 
               return (
                 <div key={estado} className={`flex flex-col rounded-2xl border ${style.border} bg-white shadow-sm shadow-gray-100/30 overflow-hidden w-full`}>
