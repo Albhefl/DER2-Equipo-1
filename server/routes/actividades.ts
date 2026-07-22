@@ -213,7 +213,7 @@ router.post('/:id/responsables', verificarToken, async (req: AuthRequest, res: R
  */
 router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { nombre, descripcion, fecha_limite, estado } = req.body;
+  const { nombre, descripcion, fecha_limite, estado, prioridad } = req.body;
   const usuario_id = req.user?.userId;
  
   if (!id) {
@@ -259,6 +259,15 @@ router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Prom
       });
     }
  
+    // HU-019: si no mandan prioridad, se conserva la que ya tenía la actividad
+    // (a diferencia de la creación, aquí NO se fuerza "MED" por default).
+    const prioridadUpper = prioridad ? String(prioridad).toUpperCase() : actividadExistente.priority;
+    if (!VALID_PRIORITIES.includes(prioridadUpper)) {
+      return res.status(400).json({
+        message: `Prioridad inválida. Debe ser una de: ${VALID_PRIORITIES.join(', ')}`
+      });
+    }
+ 
     const actividadActualizada = await db.activity.update({
       where: { id },
       data: {
@@ -266,6 +275,7 @@ router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Prom
         description: descripcion?.trim() || null,
         deadline: fechaSeleccionada,
         status: estadoUpper as 'PENDING' | 'IN_PROCESS' | 'IN_REVIEW' | 'DONE',
+        priority: prioridadUpper as 'HIGH' | 'MED' | 'LOW',
       },
       include: INCLUDE_ASSIGNEES,
     });
