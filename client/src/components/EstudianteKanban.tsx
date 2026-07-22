@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown } from 'lucide-react';
+import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter } from 'lucide-react';
 
 // ─── CONEXIÓN A LA API REAL (sin datos simulados) ───────────────────────────
 const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
@@ -48,14 +48,6 @@ function priorityBg(p?: PrioridadActividad) {
 }
 
 // ── HU-017: indicador visual de vencimiento en tarjetas ──
-// Escenario 1: > 5 días restantes  -> verde
-// Escenario 2: entre 1 y 5 días restantes -> naranja
-//   (una actividad que vence justo HOY, 0 días, se trata también como naranja:
-//   los criterios no cubren ese punto exacto, pero aún no está "vencida" y ya
-//   no cabe en "más de 5 días", así que es la lectura más razonable)
-// Escenario 3: fecha límite ya pasada y la actividad no está completada -> rojo + "Vencida"
-// Las actividades en la columna "Completado" no se marcan como vencidas ni se
-// colorean por urgencia: ya no tiene sentido avisar que una tarea terminada "vence".
 type VencimientoColor = "verde" | "naranja" | "rojo" | "neutral";
 
 function calcularVencimiento(deadline: string, status: EstadoActividad): { color: VencimientoColor; vencida: boolean } {
@@ -96,8 +88,6 @@ function initials(name: string) {
   return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
-// HU-015.2: combina responsables anteriores + nuevos sin duplicados y sin perder a nadie
-// (misma lógica usada en la vista de Lista/Detalle, replicada aquí para el tablero).
 function mergeMiembros(previos: Miembro[], nuevos: Miembro[]): Miembro[] {
   const combinados = [...previos, ...nuevos];
   const vistos = new Set<string>();
@@ -117,6 +107,9 @@ export const EstudianteKanban: React.FC = () => {
   // ── HU-016: filtrado del tablero por responsable ──
   const [filtroResponsable, setFiltroResponsable] = useState("");
 
+  // ── HU-020: filtrado del tablero por nivel de prioridad ──
+  const [filtroPrioridad, setFiltroPrioridad] = useState("");
+
   // ── HU-018: ordenamiento del tablero por fecha límite ──
   type OrdenFecha = "" | "asc" | "desc";
   const [ordenFecha, setOrdenFecha] = useState<OrdenFecha>("");
@@ -126,7 +119,6 @@ export const EstudianteKanban: React.FC = () => {
   const [guardando, setGuardando] = useState(false);
   const [errorGuardar, setErrorGuardar] = useState<string | null>(null);
 
-  // ── Asignación de responsables dentro del modal (misma mecánica de HU-015) ──
   const [miembrosEquipo, setMiembrosEquipo] = useState<Miembro[]>([]);
   const [miembroSeleccionado, setMiembroSeleccionado] = useState("");
   const [asignando, setAsignando] = useState(false);
@@ -163,7 +155,6 @@ export const EstudianteKanban: React.FC = () => {
     fetchMiembros();
   }, []);
 
-  // Responsables que realmente aparecen en el tablero, para poblar el filtro (HU-016.1).
   const responsablesDisponibles = mergeMiembros([], actividades.flatMap(a => a.assignees.map(r => r.user)));
 
   const openEdit = (actividad: Actividad) => {
@@ -225,7 +216,6 @@ export const EstudianteKanban: React.FC = () => {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "No se pudo asignar el responsable.");
-      // HU-015.2: se fusiona con lo que ya tenía la actividad, nunca se sobreescribe.
       const nuevos: Miembro[] = (data.actividad?.assignees ?? []).map((a: Responsable) => a.user);
       const fusionados = mergeMiembros(editModal.assignees.map(a => a.user), nuevos);
       const actividadActualizada = { ...editModal, ...data.actividad, assignees: fusionados.map(u => ({ user: u })) };
@@ -248,7 +238,6 @@ export const EstudianteKanban: React.FC = () => {
 
   const openCreate = (estado: EstadoActividad) => {
     setCreateModal(estado);
-    // Escenario 2: si el estudiante no toca el selector, "MED" viaja tal cual al guardar.
     setCreateDraft({ name: "", description: "", deadline: new Date().toISOString().split("T")[0], priority: "MED" });
     setErrorCrear(null);
   };
@@ -310,8 +299,8 @@ export const EstudianteKanban: React.FC = () => {
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tablero Kanban</h1>
           <p className="text-sm text-gray-500 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <div className="relative w-full sm:w-48">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-wrap">
+          <div className="relative w-full sm:w-44">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               value={search}
@@ -322,7 +311,7 @@ export const EstudianteKanban: React.FC = () => {
           </div>
 
           {/* HU-016.1: control de filtro por responsable */}
-          <div className="relative w-full sm:w-44">
+          <div className="relative w-full sm:w-40">
             <UserPlus size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <select
               value={filtroResponsable}
@@ -334,8 +323,23 @@ export const EstudianteKanban: React.FC = () => {
             </select>
           </div>
 
+          {/* HU-020: control de filtro por prioridad */}
+          <div className="relative w-full sm:w-40">
+            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <select
+              value={filtroPrioridad}
+              onChange={e => setFiltroPrioridad(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40 cursor-pointer"
+            >
+              <option value="">Todas las prioridades</option>
+              <option value="HIGH">Alta prioridad</option>
+              <option value="MED">Media prioridad</option>
+              <option value="LOW">Baja prioridad</option>
+            </select>
+          </div>
+
           {/* HU-018: ordenamiento del tablero por fecha límite */}
-          <div className="relative w-full sm:w-52">
+          <div className="relative w-full sm:w-48">
             <ArrowUpDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <select
               value={ordenFecha}
@@ -348,14 +352,17 @@ export const EstudianteKanban: React.FC = () => {
             </select>
           </div>
 
-          {/* HU-016.2: limpiar filtro y restaurar vista completa, sin recargar */}
-          {filtroResponsable && (
+          {/* HU-016 y HU-020: limpiar filtros aplicados */}
+          {(filtroResponsable || filtroPrioridad) && (
             <button
               type="button"
-              onClick={() => setFiltroResponsable("")}
+              onClick={() => {
+                setFiltroResponsable("");
+                setFiltroPrioridad("");
+              }}
               className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shrink-0"
             >
-              <X size={13} /> Limpiar filtro
+              <X size={13} /> Limpiar filtros
             </button>
           )}
         </div>
@@ -373,16 +380,15 @@ export const EstudianteKanban: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full items-start box-border">
             {ESTADOS.map(estado => {
               const style = columnStyle(estado);
-              // HU-016 escenario 1: el filtro de responsable aplica en TODAS las columnas a la vez,
-              // combinado (AND) con la búsqueda por título que ya existía.
+
+              // HU-016 y HU-020: filtrado encadenado (AND) por título, responsable y prioridad.
               const filteredCards = actividades
                 .filter(a =>
                   a.status === estado &&
                   a.name.toLowerCase().includes(search.toLowerCase()) &&
-                  (!filtroResponsable || a.assignees.some(r => r.user.id === filtroResponsable))
+                  (!filtroResponsable || a.assignees.some(r => r.user.id === filtroResponsable)) &&
+                  (!filtroPrioridad || (a.priority || "MED") === filtroPrioridad)
                 )
-                // HU-018: ordena dentro de cada columna por fecha límite.
-                // ordenFecha === "" deja el orden tal como llega de la API (sin ordenar).
                 .sort((a, b) => {
                   if (!ordenFecha) return 0;
                   const fechaA = new Date(a.deadline).getTime();
@@ -457,7 +463,7 @@ export const EstudianteKanban: React.FC = () => {
 
                     {filteredCards.length === 0 && (
                       <div className="text-center py-6 text-[11px] text-gray-400 font-medium border border-dashed border-gray-200 rounded-xl bg-white/50">
-                        {filtroResponsable ? "Sin actividades para este responsable" : "No hay actividades"}
+                        {filtroResponsable || filtroPrioridad ? "Sin actividades para los filtros seleccionados" : "No hay actividades"}
                       </div>
                     )}
                   </div>
@@ -503,7 +509,6 @@ export const EstudianteKanban: React.FC = () => {
                 />
               </div>
 
-              {/* Responsables: badges + selector de asignación (misma mecánica de HU-015) */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Responsable(s)</label>
                 {editModal.assignees.length > 0 ? (
@@ -581,7 +586,7 @@ export const EstudianteKanban: React.FC = () => {
         </div>
       )}
 
-      {/* VENTANA MODAL PARA CREAR ACTIVIDAD (HU-019: incluye Prioridad, default "Media") */}
+      {/* VENTANA MODAL PARA CREAR ACTIVIDAD */}
       {createModal && (
         <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeCreate}>
           <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
@@ -628,7 +633,6 @@ export const EstudianteKanban: React.FC = () => {
                 />
               </div>
 
-              {/* HU-019: campo de Prioridad, "Media" viene marcada por defecto (Escenario 2) */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Prioridad</label>
                 <div className="flex items-center gap-4">
