@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import authRoutes from './routes/auth.js'; // Importamos las rutas de login
 import actividadesRoutes from './routes/actividades.js'; // Importamos las rutas de actividades
 import db from './src/db.js'; // Importamos la conexión a la base de datos
+ import usuariosRoutes from './routes/usuarios.js';
 dotenv.config();
 
 const app = express();
@@ -25,3 +26,5 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
 });
+
+app.use('/api/usuarios', usuariosRoutes);
