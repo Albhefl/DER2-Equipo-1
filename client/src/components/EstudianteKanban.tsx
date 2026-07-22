@@ -239,22 +239,50 @@ export const EstudianteKanban: React.FC = () => {
     }
   };
 
-  const addCard = async (estado: EstadoActividad) => {
-    const nombre = prompt(`Nueva actividad en "${ESTADO_LABELS[estado]}":`) ?? "";
-    if (!nombre.trim()) return;
+  // ── HU-019: modal de creación con campo de Prioridad ──
+  type CreateDraft = { name: string; description: string; deadline: string; priority: PrioridadActividad };
+  const [createModal, setCreateModal] = useState<EstadoActividad | null>(null);
+  const [createDraft, setCreateDraft] = useState<CreateDraft>({ name: "", description: "", deadline: "", priority: "MED" });
+  const [creando, setCreando] = useState(false);
+  const [errorCrear, setErrorCrear] = useState<string | null>(null);
+
+  const openCreate = (estado: EstadoActividad) => {
+    setCreateModal(estado);
+    // Escenario 2: si el estudiante no toca el selector, "MED" viaja tal cual al guardar.
+    setCreateDraft({ name: "", description: "", deadline: new Date().toISOString().split("T")[0], priority: "MED" });
+    setErrorCrear(null);
+  };
+
+  const closeCreate = () => {
+    setCreateModal(null);
+  };
+
+  const saveCreate = async () => {
+    if (!createModal) return;
+    if (!createDraft.name.trim()) { setErrorCrear("El nombre es obligatorio."); return; }
+    setCreando(true);
+    setErrorCrear(null);
     try {
       const token = localStorage.getItem("token");
-      const hoy = new Date().toISOString().split("T")[0];
       const response = await fetch(API_ACTIVIDADES_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ nombre: nombre.trim(), descripcion: "", fecha_limite: hoy, estado }),
+        body: JSON.stringify({
+          nombre: createDraft.name.trim(),
+          descripcion: createDraft.description.trim(),
+          fecha_limite: createDraft.deadline,
+          estado: createModal,
+          prioridad: createDraft.priority,
+        }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "No se pudo crear la actividad.");
       setActividades(prev => [data.actividad, ...prev]);
+      closeCreate();
     } catch (err: any) {
-      alert(err.message || "Error de conexión con el servidor.");
+      setErrorCrear(err.message || "Error de conexión con el servidor.");
+    } finally {
+      setCreando(false);
     }
   };
 
@@ -437,7 +465,7 @@ export const EstudianteKanban: React.FC = () => {
                   {/* ACCIÓN AÑADIR ACTIVIDAD */}
                   <div className="p-2 border-t border-inherit bg-gray-50/50">
                     <button
-                      onClick={() => addCard(estado)}
+                      onClick={() => openCreate(estado)}
                       className="w-full flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-bold text-gray-500 hover:text-blue-600 hover:bg-white border border-transparent hover:border-gray-100 transition-all"
                     >
                       <Plus size={14} /> Agregar actividad
@@ -547,6 +575,84 @@ export const EstudianteKanban: React.FC = () => {
               <button type="button" onClick={closeEdit} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">Cancelar</button>
               <button type="button" onClick={saveEdit} disabled={guardando} className="px-4 py-2 text-xs font-bold text-white bg-[#0B1026] hover:bg-[#060916] rounded-xl transition-colors shadow-sm disabled:opacity-50">
                 {guardando ? "Guardando..." : "Guardar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VENTANA MODAL PARA CREAR ACTIVIDAD (HU-019: incluye Prioridad, default "Media") */}
+      {createModal && (
+        <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeCreate}>
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Nueva actividad</h3>
+                <p className="text-[11px] text-gray-400 font-medium mt-0.5">Se creará en: {ESTADO_LABELS[createModal]}</p>
+              </div>
+              <button onClick={closeCreate} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {errorCrear && <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-semibold p-2.5 rounded-xl text-center">{errorCrear}</div>}
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Título *</label>
+                <input
+                  type="text"
+                  value={createDraft.name}
+                  onChange={e => setCreateDraft(d => ({ ...d, name: e.target.value }))}
+                  placeholder="Ej. Investigar metodologías ágiles"
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Descripción</label>
+                <textarea
+                  value={createDraft.description}
+                  onChange={e => setCreateDraft(d => ({ ...d, description: e.target.value }))}
+                  rows={2}
+                  placeholder="Describe el objetivo y alcance de la actividad."
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 resize-none focus:outline-none focus:border-blue-400 transition-all box-border"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha límite</label>
+                <input
+                  type="date"
+                  value={createDraft.deadline}
+                  onChange={e => setCreateDraft(d => ({ ...d, deadline: e.target.value }))}
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+                />
+              </div>
+
+              {/* HU-019: campo de Prioridad, "Media" viene marcada por defecto (Escenario 2) */}
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Prioridad</label>
+                <div className="flex items-center gap-4">
+                  {(["HIGH", "MED", "LOW"] as PrioridadActividad[]).map(p => (
+                    <label key={p} className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-gray-700">
+                      <input
+                        type="radio"
+                        name="prioridad-nueva"
+                        value={p}
+                        checked={createDraft.priority === p}
+                        onChange={() => setCreateDraft(d => ({ ...d, priority: p }))}
+                        className="accent-black w-3.5 h-3.5"
+                      />
+                      <span>{PRIORIDAD_LABELS[p]}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
+              <button type="button" onClick={closeCreate} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">Cancelar</button>
+              <button type="button" onClick={saveCreate} disabled={creando} className="px-4 py-2 text-xs font-bold text-white bg-[#0B1026] hover:bg-[#060916] rounded-xl transition-colors shadow-sm disabled:opacity-50">
+                {creando ? "Creando..." : "Crear actividad"}
               </button>
             </div>
           </div>
