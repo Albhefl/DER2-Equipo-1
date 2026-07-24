@@ -8,6 +8,8 @@ const API_USUARIOS_URL = "http://localhost:3000/api/usuarios";
 type EstadoActividad = "PENDING" | "IN_PROCESS" | "IN_REVIEW" | "DONE";
 type PrioridadActividad = "HIGH" | "MED" | "LOW";
 
+// HU-021 escenario 1: estos son exactamente los 4 estados/columnas del tablero
+// (Pendiente, En Proceso, En Revisión, Completado) con sus encabezados.
 const ESTADOS: EstadoActividad[] = ["PENDING", "IN_PROCESS", "IN_REVIEW", "DONE"];
 
 const ESTADO_LABELS: Record<EstadoActividad, string> = {
@@ -377,10 +379,15 @@ export const EstudianteKanban: React.FC = () => {
       ) : (
         <>
           {/* REJILLA RESPONSIVA DE COLUMNAS */}
+          {/* HU-021 escenario 1: se renderizan las 4 columnas (Pendiente, En Proceso,
+              En Revisión, Completado) con su encabezado, siempre, sin importar los datos. */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full items-start box-border">
             {ESTADOS.map(estado => {
               const style = columnStyle(estado);
 
+              // HU-021 escenario 2: "a.status === estado" es lo que ubica automáticamente
+              // cada tarjeta en la columna que corresponde a su estado actual, sin lógica
+              // manual de "mover" tarjetas entre columnas.
               // HU-016 y HU-020: filtrado encadenado (AND) por título, responsable y prioridad.
               const filteredCards = actividades
                 .filter(a =>
@@ -398,7 +405,7 @@ export const EstudianteKanban: React.FC = () => {
 
               return (
                 <div key={estado} className={`flex flex-col rounded-2xl border ${style.border} bg-white shadow-sm shadow-gray-100/30 overflow-hidden w-full`}>
-                  {/* HEADER DE COLUMNA */}
+                  {/* HEADER DE COLUMNA — HU-021 escenario 1: encabezado con nombre del estado */}
                   <div className={`px-4 py-3 flex items-center justify-between border-b border-inherit ${style.header}`}>
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${style.dot}`} />
