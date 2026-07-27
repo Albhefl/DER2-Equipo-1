@@ -11,6 +11,23 @@ function initials(name: string) {
   return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
+// HU-025 escenario 2: necesitamos saber quién es el usuario actual para decidir
+// si mostramos el botón "Eliminar" en un comentario. El login solo guarda el
+// token, no el id por separado, así que lo leemos directo del payload del JWT.
+// OJO: esto es solo para decidir qué mostrar en la interfaz; la validación real
+// de "solo el autor puede borrar su comentario" vive en el backend, no aquí.
+function getUserIdFromToken(): string | null {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+    const payload = token.split(".")[1];
+    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return decoded.userId || null;
+  } catch {
+    return null;
+  }
+}
+
 function Badge({ label, cls }: { label: string; cls: string }) { 
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>; 
 }
@@ -529,6 +546,12 @@ function ActividadDetallePage({
   const [enviandoComentario, setEnviandoComentario] = useState(false);
   const [errorComentario, setErrorComentario] = useState<string | null>(null);
 
+  // ── HU-025: eliminación de comentario propio ──
+  // Se calcula una sola vez (no en cada render) porque decodificar el token
+  // no cambia mientras dure la sesión.
+  const [usuarioActualId] = useState<string | null>(() => getUserIdFromToken());
+  const [eliminandoComentarioId, setEliminandoComentarioId] = useState<string | null>(null);
+
   useEffect(() => {
     const fetchComentarios = async () => {
       setCargandoComentarios(true);
@@ -571,6 +594,29 @@ function ActividadDetallePage({
       setErrorComentario(err.message || "Error de conexión con el servidor.");
     } finally {
       setEnviandoComentario(false);
+    }
+  };
+
+  const handleEliminarComentario = async (comentarioId: string) => {
+    if (!confirm("¿Eliminar este comentario? Esta acción no se puede deshacer.")) return;
+    setEliminandoComentarioId(comentarioId);
+    setErrorComentario(null);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ACTIVIDADES_URL}/${actividad.id}/comentarios/${comentarioId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "No se pudo eliminar el comentario.");
+      }
+      // Escenario 1: desaparece de la vista de inmediato (ya se borró en el backend).
+      setComentarios(prev => prev.filter(c => c.id !== comentarioId));
+    } catch (err: any) {
+      setErrorComentario(err.message || "Error de conexión con el servidor.");
+    } finally {
+      setEliminandoComentarioId(null);
     }
   };
 
@@ -742,8 +788,10 @@ function ActividadDetallePage({
               ) : comentarios.length === 0 ? (
                 <p className="text-xs text-gray-300 font-medium text-center py-8">Aún no hay comentarios.</p>
               ) : (
-                comentarios.map(c => (
-                  <div key={c.id} className="flex items-start gap-2.5">
+                comentarios.map(c => {
+                  const esPropio = usuarioActualId !== null && c.author.id === usuarioActualId;
+                  return (
+                  <div key={c.id} className="flex items-start gap-2.5 group">
                     <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold flex items-center justify-center shrink-0 border border-indigo-100">
                       {initials(c.author.name)}
                     </div>
@@ -756,8 +804,23 @@ function ActividadDetallePage({
                       </div>
                       <p className="text-xs text-gray-600 mt-0.5 break-words">{c.content}</p>
                     </div>
+                    {/* HU-025 escenario 2: el botón "Eliminar" solo existe en el DOM para
+                        comentarios propios — en comentarios ajenos, esPropio es false y
+                        el botón directamente no se renderiza (no solo se oculta con CSS). */}
+                    {esPropio && (
+                      <button
+                        type="button"
+                        onClick={() => handleEliminarComentario(c.id)}
+                        disabled={eliminandoComentarioId === c.id}
+                        className="p-1 text-gray-300 hover:text-red-500 rounded-lg hover:bg-gray-50 transition-colors shrink-0 md:opacity-0 md:group-hover:opacity-100 disabled:opacity-40"
+                        title="Eliminar comentario"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
 

@@ -428,4 +428,56 @@ router.post('/:id/comentarios', verificarToken, async (req: AuthRequest, res: Re
   }
 });
 
+/**
+ * =========================================================================
+ * ENDPOINT: DELETE /api/actividades/:id/comentarios/:comentarioId
+ * Elimina un comentario propio (HU-025)
+ * Escenario 2: nunca permite borrar comentarios de otro autor, aunque la
+ * interfaz ya oculte el botón — la validación real vive aquí.
+ * =========================================================================
+ */
+router.delete('/:id/comentarios/:comentarioId', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id, comentarioId } = req.params;
+  const usuario_id = req.user?.userId;
+
+  if (!id || !comentarioId) {
+    return res.status(400).json({ message: 'ID de actividad y de comentario requeridos.' });
+  }
+
+  if (!usuario_id) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
+
+  try {
+    // Solo un responsable de la actividad puede operar sobre sus comentarios
+    const actividad = await db.activity.findFirst({
+      where: { id, assignees: { some: { userId: usuario_id } } },
+    });
+
+    if (!actividad) {
+      return res.status(404).json({ message: 'Actividad no encontrada.' });
+    }
+
+    const comentario = await db.comment.findFirst({
+      where: { id: comentarioId, activityId: id },
+    });
+
+    if (!comentario) {
+      return res.status(404).json({ message: 'Comentario no encontrado.' });
+    }
+
+    // Escenario 1 vs 2: solo el autor original puede eliminarlo
+    if (comentario.authorId !== usuario_id) {
+      return res.status(403).json({ message: 'No puedes eliminar comentarios de otro usuario.' });
+    }
+
+    await db.comment.delete({ where: { id: comentarioId } });
+
+    return res.status(200).json({ message: 'Comentario eliminado exitosamente.' });
+  } catch (error) {
+    console.error('Error al eliminar comentario:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
 export default router;
