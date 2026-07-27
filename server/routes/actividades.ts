@@ -332,4 +332,100 @@ router.delete('/:id', verificarToken, async (req: AuthRequest, res: Response): P
   }
 });
  
+/**
+ * =========================================================================
+ * ENDPOINT: GET /api/actividades/:id/comentarios
+ * Lista los comentarios de una actividad en orden cronológico (HU-024)
+ * =========================================================================
+ */
+router.get('/:id/comentarios', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const usuario_id = req.user?.userId;
+
+  if (!id) {
+    return res.status(400).json({ message: 'ID de actividad requerido.' });
+  }
+
+  if (!usuario_id) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
+
+  try {
+    // Solo un responsable de la actividad puede ver sus comentarios
+    const actividad = await db.activity.findFirst({
+      where: { id, assignees: { some: { userId: usuario_id } } },
+    });
+
+    if (!actividad) {
+      return res.status(404).json({ message: 'Actividad no encontrada.' });
+    }
+
+    const comentarios = await db.comment.findMany({
+      where: { activityId: id },
+      include: { author: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'asc' }, // Escenario 1: listado cronológico
+    });
+
+    return res.status(200).json({ comentarios });
+  } catch (error) {
+    console.error('Error al obtener comentarios:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
+/**
+ * =========================================================================
+ * ENDPOINT: POST /api/actividades/:id/comentarios
+ * Publica un nuevo comentario en una actividad (HU-024)
+ * Escenario 2: rechaza contenido vacío o compuesto solo por espacios en blanco.
+ * =========================================================================
+ */
+router.post('/:id/comentarios', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { contenido } = req.body;
+  const usuario_id = req.user?.userId;
+
+  if (!id) {
+    return res.status(400).json({ message: 'ID de actividad requerido.' });
+  }
+
+  if (!usuario_id) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
+
+  // Escenario 2: el backend valida esto también, aunque el frontend ya
+  // deshabilite el botón — nunca confiar solo en la validación del cliente.
+  if (!contenido || String(contenido).trim() === '') {
+    return res.status(400).json({ message: 'El comentario no puede estar vacío.' });
+  }
+
+  try {
+    // Solo un responsable de la actividad puede comentar en ella
+    const actividad = await db.activity.findFirst({
+      where: { id, assignees: { some: { userId: usuario_id } } },
+    });
+
+    if (!actividad) {
+      return res.status(404).json({ message: 'Actividad no encontrada.' });
+    }
+
+    const comentario = await db.comment.create({
+      data: {
+        content: String(contenido).trim(),
+        activityId: id,
+        authorId: usuario_id,
+      },
+      include: { author: { select: { id: true, name: true } } },
+    });
+
+    return res.status(201).json({
+      message: 'Comentario publicado exitosamente.',
+      comentario,
+    });
+  } catch (error) {
+    console.error('Error al publicar comentario:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
 export default router;
