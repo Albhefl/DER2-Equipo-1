@@ -530,6 +530,16 @@ type ComentarioActividad = {
   author: { id: string; name: string };
 };
 
+type EvidenciaActividad = {
+  id: string;
+  url: string;
+  createdAt: string;
+  creator: { id: string; name: string };
+};
+
+// HU-027 escenario 2: validación de formato de URL, igual en frontend que en backend.
+const URL_REGEX = /^https?:\/\/.+/i;
+
 function ActividadDetallePage({
   actividad, onBack, onUpdated,
 }: {
@@ -551,6 +561,62 @@ function ActividadDetallePage({
   // no cambia mientras dure la sesión.
   const [usuarioActualId] = useState<string | null>(() => getUserIdFromToken());
   const [eliminandoComentarioId, setEliminandoComentarioId] = useState<string | null>(null);
+
+  // ── HU-027: registro de evidencia (URL) ──
+  const [urlEvidencia, setUrlEvidencia] = useState("");
+  const [evidencias, setEvidencias] = useState<EvidenciaActividad[]>([]);
+  const [cargandoEvidencias, setCargandoEvidencias] = useState(true);
+  const [subiendoEvidencia, setSubiendoEvidencia] = useState(false);
+  const [errorEvidencia, setErrorEvidencia] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchEvidencias = async () => {
+      setCargandoEvidencias(true);
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${API_ACTIVIDADES_URL}/${actividad.id}/evidencias`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (response.ok) setEvidencias(data.evidencias);
+      } catch (err) {
+        console.error("Error al cargar evidencias:", err);
+      } finally {
+        setCargandoEvidencias(false);
+      }
+    };
+    fetchEvidencias();
+  }, [actividad.id]);
+
+  const handleSubirEvidencia = async () => {
+    const url = urlEvidencia.trim();
+    // Escenario 2: se valida ANTES de llamar al backend, con el mismo mensaje
+    // exacto que pide la HU, para que el estudiante no espere una respuesta
+    // de red para saber que el formato está mal.
+    if (!URL_REGEX.test(url)) {
+      setErrorEvidencia("Por favor, ingresa una URL válida.");
+      return;
+    }
+    setSubiendoEvidencia(true);
+    setErrorEvidencia(null);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ACTIVIDADES_URL}/${actividad.id}/evidencias`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ url }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "No se pudo registrar la evidencia.");
+      // Escenario 1: se agrega de inmediato a la lista, ya asociada y guardada.
+      setEvidencias(prev => [data.evidencia, ...prev]);
+      setUrlEvidencia("");
+    } catch (err: any) {
+      setErrorEvidencia(err.message || "Error de conexión con el servidor.");
+    } finally {
+      setSubiendoEvidencia(false);
+    }
+  };
 
   useEffect(() => {
     const fetchComentarios = async () => {
@@ -848,11 +914,53 @@ function ActividadDetallePage({
         <div className="space-y-5">
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-3">
             <h3 className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
-              <Paperclip size={15} className="text-gray-400" /> Evidencias (0)
+              <Paperclip size={15} className="text-gray-400" /> Evidencias ({evidencias.length})
             </h3>
-            <p className="text-xs text-gray-400">Sin evidencias adjuntas.</p>
-            <button className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-gray-200 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors">
-              <Upload size={13} /> Subir evidencia
+
+            {errorEvidencia && (
+              <div className="bg-red-50 border border-red-100 text-red-600 text-[11px] font-semibold p-2 rounded-xl text-center">
+                {errorEvidencia}
+              </div>
+            )}
+
+            {cargandoEvidencias ? (
+              <p className="text-xs text-gray-300 font-medium">Cargando evidencias...</p>
+            ) : evidencias.length === 0 ? (
+              <p className="text-xs text-gray-400">Sin evidencias adjuntas.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {evidencias.map(ev => (
+                  <li key={ev.id} className="text-xs">
+                    <a
+                      href={ev.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline break-all"
+                    >
+                      {ev.url}
+                    </a>
+                    <p className="text-[10px] text-gray-400 mt-0.5">
+                      {ev.creator.name} · {new Date(ev.createdAt).toLocaleDateString("es-MX")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <input
+              type="text"
+              value={urlEvidencia}
+              onChange={e => setUrlEvidencia(e.target.value)}
+              placeholder="https://..."
+              className="w-full p-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+            />
+            <button
+              type="button"
+              onClick={handleSubirEvidencia}
+              disabled={!urlEvidencia.trim() || subiendoEvidencia}
+              className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-gray-200 rounded-xl text-xs font-bold text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-40"
+            >
+              <Upload size={13} /> {subiendoEvidencia ? "Subiendo..." : "Subir evidencia"}
             </button>
           </div>
 
