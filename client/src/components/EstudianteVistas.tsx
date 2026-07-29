@@ -11,6 +11,23 @@ function initials(name: string) {
   return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
+// HU-025 escenario 2: necesitamos saber quién es el usuario actual para decidir
+// si mostramos el botón "Eliminar" en un comentario. El login solo guarda el
+// token, no el id por separado, así que lo leemos directo del payload del JWT.
+// OJO: esto es solo para decidir qué mostrar en la interfaz; la validación real
+// de "solo el autor puede borrar su comentario" vive en el backend, no aquí.
+function getUserIdFromToken(): string | null {
+  try {
+    const token = localStorage.getItem("token");
+    if (!token) return null;
+    const payload = token.split(".")[1];
+    const decoded = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+    return decoded.userId || null;
+  } catch {
+    return null;
+  }
+}
+
 function Badge({ label, cls }: { label: string; cls: string }) { 
   return <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}>{label}</span>; 
 }
@@ -506,6 +523,13 @@ function ActividadEliminarConfirm({ actividad, onClose, onDeleted }: { actividad
 
 type ChecklistItem = { id: string; label: string; done: boolean };
 
+type ComentarioActividad = {
+  id: string;
+  content: string;
+  createdAt: string;
+  author: { id: string; name: string };
+};
+
 function ActividadDetallePage({
   actividad, onBack, onUpdated,
 }: {
@@ -514,7 +538,88 @@ function ActividadDetallePage({
   onUpdated: (a: Actividad) => void;
 }) {
   const [estado, setEstado] = useState<EstadoActividad>(actividad.status);
+
+  // ── HU-024: comentarios reales de la actividad ──
   const [comentario, setComentario] = useState("");
+  const [comentarios, setComentarios] = useState<ComentarioActividad[]>([]);
+  const [cargandoComentarios, setCargandoComentarios] = useState(true);
+  const [enviandoComentario, setEnviandoComentario] = useState(false);
+  const [errorComentario, setErrorComentario] = useState<string | null>(null);
+
+  // ── HU-025: eliminación de comentario propio ──
+  // Se calcula una sola vez (no en cada render) porque decodificar el token
+  // no cambia mientras dure la sesión.
+  const [usuarioActualId] = useState<string | null>(() => getUserIdFromToken());
+  const [eliminandoComentarioId, setEliminandoComentarioId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchComentarios = async () => {
+      setCargandoComentarios(true);
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(`${API_ACTIVIDADES_URL}/${actividad.id}/comentarios`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await response.json();
+        if (response.ok) setComentarios(data.comentarios);
+      } catch (err) {
+        console.error("Error al cargar comentarios:", err);
+      } finally {
+        setCargandoComentarios(false);
+      }
+    };
+    fetchComentarios();
+  }, [actividad.id]);
+
+  const handlePublicarComentario = async () => {
+    // Escenario 2: doble seguro además del disabled del botón (por si se dispara
+    // el submit de otra forma, ej. presionando Enter).
+    if (!comentario.trim()) return;
+    setEnviandoComentario(true);
+    setErrorComentario(null);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ACTIVIDADES_URL}/${actividad.id}/comentarios`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ contenido: comentario.trim() }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "No se pudo publicar el comentario.");
+      // Escenario 1: se agrega al final -> queda listado cronológicamente,
+      // con autor y fecha ya incluidos en la respuesta del backend.
+      setComentarios(prev => [...prev, data.comentario]);
+      setComentario("");
+    } catch (err: any) {
+      setErrorComentario(err.message || "Error de conexión con el servidor.");
+    } finally {
+      setEnviandoComentario(false);
+    }
+  };
+
+  const handleEliminarComentario = async (comentarioId: string) => {
+    if (!confirm("¿Eliminar este comentario? Esta acción no se puede deshacer.")) return;
+    setEliminandoComentarioId(comentarioId);
+    setErrorComentario(null);
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ACTIVIDADES_URL}/${actividad.id}/comentarios/${comentarioId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "No se pudo eliminar el comentario.");
+      }
+      // Escenario 1: desaparece de la vista de inmediato (ya se borró en el backend).
+      setComentarios(prev => prev.filter(c => c.id !== comentarioId));
+    } catch (err: any) {
+      setErrorComentario(err.message || "Error de conexión con el servidor.");
+    } finally {
+      setEliminandoComentarioId(null);
+    }
+  };
+
   // TODO: reemplazar por el checklist real de la actividad cuando el backend lo exponga
   const [checklist, setChecklist] = useState<ChecklistItem[]>([
     { id: "1", label: "Revisar requerimientos", done: false },
@@ -668,22 +773,69 @@ function ActividadDetallePage({
 
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm space-y-4">
             <h3 className="flex items-center gap-1.5 text-sm font-bold text-gray-900">
-              <MessageSquare size={15} className="text-gray-400" /> Comentarios (0)
+              <MessageSquare size={15} className="text-gray-400" /> Comentarios ({comentarios.length})
             </h3>
-            <div className="min-h-[160px] flex items-center justify-center text-xs text-gray-300 font-medium">
-              Aún no hay comentarios.
+
+            {errorComentario && (
+              <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-semibold p-2.5 rounded-xl text-center">
+                {errorComentario}
+              </div>
+            )}
+
+            <div className="min-h-[160px] max-h-[320px] overflow-y-auto space-y-3">
+              {cargandoComentarios ? (
+                <p className="text-xs text-gray-300 font-medium text-center py-8">Cargando comentarios...</p>
+              ) : comentarios.length === 0 ? (
+                <p className="text-xs text-gray-300 font-medium text-center py-8">Aún no hay comentarios.</p>
+              ) : (
+                comentarios.map(c => {
+                  const esPropio = usuarioActualId !== null && c.author.id === usuarioActualId;
+                  return (
+                  <div key={c.id} className="flex items-start gap-2.5 group">
+                    <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 text-[10px] font-bold flex items-center justify-center shrink-0 border border-indigo-100">
+                      {initials(c.author.name)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-baseline gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-gray-800">{c.author.name}</span>
+                        <span className="text-[10px] text-gray-400 font-medium">
+                          {new Date(c.createdAt).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}
+                        </span>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-0.5 break-words">{c.content}</p>
+                    </div>
+                    {/* HU-025 escenario 2: el botón "Eliminar" solo existe en el DOM para
+                        comentarios propios — en comentarios ajenos, esPropio es false y
+                        el botón directamente no se renderiza (no solo se oculta con CSS). */}
+                    {esPropio && (
+                      <button
+                        type="button"
+                        onClick={() => handleEliminarComentario(c.id)}
+                        disabled={eliminandoComentarioId === c.id}
+                        className="p-1 text-gray-300 hover:text-red-500 rounded-lg hover:bg-gray-50 transition-colors shrink-0 md:opacity-0 md:group-hover:opacity-100 disabled:opacity-40"
+                        title="Eliminar comentario"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                  );
+                })
+              )}
             </div>
+
             <div className="flex items-center gap-2 pt-3 border-t border-gray-50">
               <input
                 value={comentario}
                 onChange={e => setComentario(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") handlePublicarComentario(); }}
                 placeholder="Escribe un comentario..."
                 className="flex-1 p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
               />
               <button
                 type="button"
-                onClick={() => setComentario("")}
-                disabled={!comentario.trim()}
+                onClick={handlePublicarComentario}
+                disabled={!comentario.trim() || enviandoComentario}
                 className="w-9 h-9 shrink-0 flex items-center justify-center bg-[#1a1d2e] text-white rounded-xl hover:bg-[#11131f] transition-colors disabled:opacity-40"
               >
                 <Send size={14} />
@@ -747,6 +899,8 @@ export function ActividadesPage() {
   const [editTarget, setEditTarget] = useState<Actividad | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Actividad | null>(null);
   const [viewTarget, setViewTarget] = useState<Actividad | null>(null);
+  // ── HU-016: filtrado del tablero por responsable ──
+  const [filtroResponsable, setFiltroResponsable] = useState("");
 
   useEffect(() => {
     const fetchActividades = async () => {
@@ -765,9 +919,19 @@ export function ActividadesPage() {
     fetchActividades();
   }, []);
 
+  // HU-016 escenario 1: al elegir un responsable, solo se muestran sus actividades;
+  // filtroResponsable === "" (estado inicial / tras "Limpiar filtro") muestra todas.
   const filtered = actividades.filter(a =>
     (filterStatus === "Todos" || a.status === filterStatus) &&
-    a.name.toLowerCase().includes(search.toLowerCase())
+    a.name.toLowerCase().includes(search.toLowerCase()) &&
+    (!filtroResponsable || a.assignees.some(r => r.user.id === filtroResponsable))
+  );
+
+  // Lista de responsables que aparecen realmente en el tablero (se reutiliza mergeMiembros
+  // solo para deduplicar por id, igual que en la asignación de HU-015).
+  const responsablesDisponibles = mergeMiembros(
+    [],
+    actividades.flatMap(a => a.assignees.map(r => r.user))
   );
 
   const counts = {
@@ -823,6 +987,30 @@ export function ActividadesPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* HU-016: filtro de tablero por responsable */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-bold text-gray-500 flex items-center gap-1.5">
+          <UserPlus size={13} className="text-gray-400" /> Filtrar por responsable:
+        </span>
+        <select
+          value={filtroResponsable}
+          onChange={e => setFiltroResponsable(e.target.value)}
+          className="px-3 py-1.5 bg-white border border-gray-200 rounded-xl text-xs font-medium text-gray-700 focus:outline-none focus:border-blue-400 transition-all"
+        >
+          <option value="">Todos los responsables</option>
+          {responsablesDisponibles.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </select>
+        {filtroResponsable && (
+          <button
+            type="button"
+            onClick={() => setFiltroResponsable("")}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+          >
+            <X size={12} /> Limpiar filtro
+          </button>
+        )}
       </div>
 
       <div className="flex flex-col gap-2.5">
