@@ -14,7 +14,10 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, rolPer
   if (userStorage) {
     try {
       const parsedUser = JSON.parse(userStorage);
-      usuarioRol = parsedUser.role; // Extrae "admin", "estudiante" o lo que contenga
+      const rawRole = (parsedUser.role || "").toLowerCase();
+      if (rawRole === 'student') usuarioRol = 'estudiante';
+      else if (rawRole === 'evaluator') usuarioRol = 'evaluador';
+      else usuarioRol = rawRole;
     } catch (e) {
       console.error("Error al parsear el usuario de localStorage", e);
     }
