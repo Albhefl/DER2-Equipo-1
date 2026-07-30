@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; 
 import { 
   ArrowLeft,
-  ShieldCheck
+  ShieldCheck,
+  ExternalLink
 } from 'lucide-react';
 
 export const EvaluadorFormulario: React.FC = () => {
@@ -102,6 +103,35 @@ export const EvaluadorFormulario: React.FC = () => {
         <div className="pt-1">
           <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-0.5">Responsable</p>
           <p className="text-xs font-bold text-gray-700">Carina Flores</p>
+        </div>
+      </div>
+
+      {/* EVIDENCIAS ADJUNTAS (HU-028) */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 p-6 space-y-3">
+        <h4 className="flex items-center gap-1.5 text-xs font-bold text-gray-900 uppercase tracking-wider">
+          Evidencias adjuntas
+        </h4>
+        <div className="bg-gray-50/50 border border-gray-100 rounded-xl p-4 flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-1">Enlace al trabajo</p>
+            <a 
+              href="https://github.com/ejemplo/repo-funcionalidad-login" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-sm font-bold text-blue-600 hover:text-blue-700 hover:underline break-all flex items-center gap-1.5"
+            >
+              https://github.com/ejemplo/repo-funcionalidad-login
+            </a>
+          </div>
+          <a 
+            href="https://github.com/ejemplo/repo-funcionalidad-login" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors shrink-0"
+            title="Abrir enlace en nueva pestaña"
+          >
+            <ExternalLink size={18} />
+          </a>
         </div>
       </div>
 
