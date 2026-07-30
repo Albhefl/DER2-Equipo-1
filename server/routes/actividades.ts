@@ -480,4 +480,100 @@ router.delete('/:id/comentarios/:comentarioId', verificarToken, async (req: Auth
   }
 });
 
+// HU-027 escenario 2: la URL debe empezar con http:// o https://
+const URL_REGEX = /^https?:\/\/.+/i;
+
+/**
+ * =========================================================================
+ * ENDPOINT: GET /api/actividades/:id/evidencias
+ * Lista las evidencias (enlaces) registradas en una actividad (HU-027)
+ * =========================================================================
+ */
+router.get('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const usuario_id = req.user?.userId;
+
+  if (!id) {
+    return res.status(400).json({ message: 'ID de actividad requerido.' });
+  }
+
+  if (!usuario_id) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
+
+  try {
+    const actividad = await db.activity.findFirst({
+      where: { id, assignees: { some: { userId: usuario_id } } },
+    });
+
+    if (!actividad) {
+      return res.status(404).json({ message: 'Actividad no encontrada.' });
+    }
+
+    const evidencias = await db.evidence.findMany({
+      where: { activityId: id },
+      include: { creator: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.status(200).json({ evidencias });
+  } catch (error) {
+    console.error('Error al obtener evidencias:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
+/**
+ * =========================================================================
+ * ENDPOINT: POST /api/actividades/:id/evidencias
+ * Registra una URL de evidencia en una actividad (HU-027)
+ * Escenario 2: rechaza cualquier texto que no tenga formato de URL válida.
+ * =========================================================================
+ */
+router.post('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { url } = req.body;
+  const usuario_id = req.user?.userId;
+
+  if (!id) {
+    return res.status(400).json({ message: 'ID de actividad requerido.' });
+  }
+
+  if (!usuario_id) {
+    return res.status(401).json({ message: 'Usuario no autenticado.' });
+  }
+
+  // Escenario 2: se valida en el servidor también, no solo en el formulario.
+  if (!url || !URL_REGEX.test(String(url).trim())) {
+    return res.status(400).json({ message: 'Por favor, ingresa una URL válida.' });
+  }
+
+  try {
+    const actividad = await db.activity.findFirst({
+      where: { id, assignees: { some: { userId: usuario_id } } },
+    });
+
+    if (!actividad) {
+      return res.status(404).json({ message: 'Actividad no encontrada.' });
+    }
+
+    const evidencia = await db.evidence.create({
+      data: {
+        url: String(url).trim(),
+        activityId: id,
+        createdBy: usuario_id,
+      },
+      include: { creator: { select: { id: true, name: true } } },
+    });
+
+    return res.status(201).json({
+      message: 'Evidencia registrada exitosamente.',
+      evidencia,
+    });
+  } catch (error) {
+    console.error('Error al registrar evidencia:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
 export default router;
