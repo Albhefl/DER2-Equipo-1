@@ -1,577 +1,515 @@
 import { Router, type Response } from 'express';
-import db from '../src/db.js'; // Cliente de Prisma (Postgres)
+import db from '../src/db.js';
 import { verificarToken, type AuthRequest } from '../middleware/auth.js';
- 
+
 const router = Router();
- 
-const VALID_STATUSES = ['PENDING', 'IN_PROCESS', 'IN_REVIEW', 'DONE'];
-const VALID_PRIORITIES = ['HIGH', 'MED', 'LOW'];
- 
-// Incluye siempre el nombre e id de cada responsable asignado (HU-015)
-const INCLUDE_ASSIGNEES = {
+
+// Incluye asignados y la información básica del Proyecto al que pertenece la actividad
+const INCLUDE_RELATIONS = {
   assignees: { include: { user: { select: { id: true, name: true } } } },
+  project: { select: { id: true, name: true } },
 };
- 
+
 /**
- * ENDPOINT: POST /api/actividades
- * Crea una nueva actividad y asigna automáticamente al usuario autenticado
- * como responsable (relación activity_assignees).
+ * Mapea estados de Prisma (PENDING, IN_PROCESS, IN_REVIEW, DONE) a Figma y viceversa
  */
-router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
-  const { nombre, descripcion, fecha_limite, prioridad } = req.body;
-  const usuario_id = req.user?.userId;
- 
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
+function mapStatusToClient(status: string): string {
+  switch (status) {
+    case 'IN_PROCESS': return 'En Proceso';
+    case 'IN_REVIEW': return 'En Revisión';
+    case 'DONE': return 'Completado';
+    case 'PENDING':
+    default: return 'Activo';
   }
- 
+}
+
+function mapStatusToPrisma(status: string): 'PENDING' | 'IN_PROCESS' | 'IN_REVIEW' | 'DONE' {
+  switch (status) {
+    case 'En Proceso':
+    case 'IN_PROCESS': return 'IN_PROCESS';
+    case 'En Revisión':
+    case 'IN_REVIEW': return 'IN_REVIEW';
+    case 'Completado':
+    case 'DONE': return 'DONE';
+    case 'Activo':
+    case 'PENDING':
+    default: return 'PENDING';
+  }
+}
+
+/**
+ * GET /api/actividades/proyectos
+ */
+router.get('/proyectos', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const usuario_id = req.user?.userId;
+  const rol = req.user?.role;
+
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
   try {
-    if (!nombre || nombre.trim() === '') {
-      return res.status(400).json({ message: 'El nombre es obligatorio.' });
-    }
- 
-    if (nombre.trim().length > 150) {
-      return res.status(400).json({ message: 'El nombre no puede superar los 150 caracteres.' });
-    }
- 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const fechaSeleccionada = new Date(fecha_limite);
- 
-    if (!fecha_limite || fechaSeleccionada < hoy) {
-      return res.status(400).json({ message: 'La fecha límite no puede ser anterior a hoy.' });
-    }
- 
-    const prioridadUpper = prioridad ? String(prioridad).toUpperCase() : 'MED';
-    if (!VALID_PRIORITIES.includes(prioridadUpper)) {
-      return res.status(400).json({
-        message: `Prioridad inválida. Debe ser una de: ${VALID_PRIORITIES.join(', ')}`
-      });
-    }
- 
-    const actividad = await db.activity.create({
-      data: {
-        name: nombre.trim(),
-        description: descripcion?.trim() || null,
-        deadline: fechaSeleccionada,
-        priority: prioridadUpper as 'HIGH' | 'MED' | 'LOW',
-        status: 'PENDING',
-        assignees: {
-          create: [{ userId: usuario_id }],
-        },
+    const whereCondition = rol === 'EVALUATOR'
+      ? { evaluators: { some: { userId: usuario_id } } }
+      : { members: { some: { userId: usuario_id } } };
+
+    const proyectos = await db.project.findMany({
+      where: whereCondition,
+      include: {
+        members: { include: { user: { select: { id: true, name: true, email: true } } } },
+        evaluators: { include: { user: { select: { id: true, name: true, email: true } } } },
+        activities: { select: { id: true, status: true } }
       },
-      include: INCLUDE_ASSIGNEES,
+      orderBy: { createdAt: 'desc' }
     });
- 
-    return res.status(201).json({
-      message: 'Actividad creada exitosamente.',
-      actividad,
+
+    const proyectosMapeados = proyectos.map((p: any) => {
+      const totalActivities = p.activities.length;
+      const doneActivities = p.activities.filter((a: any) => a.status === 'DONE').length;
+      const progress = totalActivities > 0 ? Math.round((doneActivities / totalActivities) * 100) : 0;
+
+      return {
+        id: p.id,
+        name: p.name,
+        description: p.description,
+        startDate: p.startDate,
+        endDate: p.endDate,
+        status: mapStatusToClient(p.status),
+        progress: progress,
+        members: p.members.map((m: any) => m.user),
+        evaluators: p.evaluators.map((e: any) => e.user)
+      };
     });
- 
+
+    return res.status(200).json({ proyectos: proyectosMapeados });
   } catch (error) {
-    console.error('Error al crear actividad:', error);
+    console.error('Error al obtener proyectos:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
- 
+
 /**
- * ENDPOINT: GET /api/actividades
- * Lista todas las actividades donde el usuario autenticado es responsable
+ * POST /api/actividades/proyectos
+ */
+router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const usuario_id = req.user?.userId;
+  const { id, name, description, startDate, endDate, status, evaluators, members } = req.body;
+
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ message: 'El nombre del proyecto es obligatorio.' });
+  }
+
+  try {
+    const parsedStartDate = startDate ? new Date(startDate) : null;
+    const parsedEndDate = endDate ? new Date(endDate) : null;
+    const prismaStatus = mapStatusToPrisma(status);
+
+    const membersList: Array<{ id: string }> = Array.isArray(members) ? members : [];
+    const evaluatorsList: Array<{ id: string }> = Array.isArray(evaluators) ? evaluators : [];
+
+    if (!membersList.some(m => m.id === usuario_id)) {
+      membersList.push({ id: usuario_id });
+    }
+
+    let proyectoResult: any;
+
+    if (id) {
+      await db.projectMember.deleteMany({ where: { projectId: id } });
+      await db.projectEvaluator.deleteMany({ where: { projectId: id } });
+
+      proyectoResult = await db.project.update({
+        where: { id },
+        data: {
+          name: name.trim(),
+          description: description?.trim() || null,
+          startDate: parsedStartDate,
+          endDate: parsedEndDate,
+          status: prismaStatus,
+          members: {
+            create: membersList.map(m => ({ userId: m.id }))
+          },
+          evaluators: {
+            create: evaluatorsList.map(e => ({ userId: e.id }))
+          }
+        },
+        include: {
+          members: { include: { user: { select: { id: true, name: true, email: true } } } },
+          evaluators: { include: { user: { select: { id: true, name: true, email: true } } } },
+          activities: { select: { id: true, status: true } }
+        }
+      });
+    } else {
+      proyectoResult = await db.project.create({
+        data: {
+          name: name.trim(),
+          description: description?.trim() || null,
+          startDate: parsedStartDate,
+          endDate: parsedEndDate,
+          status: prismaStatus,
+          members: {
+            create: membersList.map(m => ({ userId: m.id }))
+          },
+          evaluators: {
+            create: evaluatorsList.map(e => ({ userId: e.id }))
+          }
+        },
+        include: {
+          members: { include: { user: { select: { id: true, name: true, email: true } } } },
+          evaluators: { include: { user: { select: { id: true, name: true, email: true } } } },
+          activities: { select: { id: true, status: true } }
+        }
+      });
+    }
+
+    const totalActivities = proyectoResult.activities?.length || 0;
+    const doneActivities = proyectoResult.activities?.filter((a: any) => a.status === 'DONE').length || 0;
+    const progress = totalActivities > 0 ? Math.round((doneActivities / totalActivities) * 100) : 0;
+
+    return res.status(id ? 200 : 201).json({
+      message: id ? 'Proyecto actualizado exitosamente.' : 'Proyecto creado exitosamente.',
+      proyecto: {
+        id: proyectoResult.id,
+        name: proyectoResult.name,
+        description: proyectoResult.description,
+        startDate: proyectoResult.startDate,
+        endDate: proyectoResult.endDate,
+        status: mapStatusToClient(proyectoResult.status),
+        progress,
+        members: proyectoResult.members.map((m: any) => m.user),
+        evaluators: proyectoResult.evaluators.map((e: any) => e.user)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error al guardar proyecto:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
+/**
+ * GET /api/actividades
+ * Obtiene TODAS las actividades de los proyectos a los que pertenece el usuario
+ * (Permite que los líderes e integrantes vean los avances de todo el equipo en Kanban)
  */
 router.get('/', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const usuario_id = req.user?.userId;
- 
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
- 
+  const rol = req.user?.role;
+
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
   try {
+    const where = rol === 'EVALUATOR' 
+      ? {} 
+      : {
+          OR: [
+            { project: { members: { some: { userId: usuario_id } } } },
+            { assignees: { some: { userId: usuario_id } } }
+          ]
+        };
+
     const actividades = await db.activity.findMany({
-      where: {
-        assignees: {
-          some: { userId: usuario_id },
-        },
-      },
-      include: INCLUDE_ASSIGNEES,
+      where,
+      include: INCLUDE_RELATIONS,
       orderBy: { createdAt: 'desc' },
     });
- 
+
     return res.status(200).json({ actividades });
   } catch (error) {
     console.error('Error al obtener actividades:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
- 
+
 /**
- * ENDPOINT: GET /api/actividades/:id
- * Detalle de una actividad puntual, incluyendo sus responsables (HU-015)
+ * POST /api/actividades
+ * Crea una actividad asignando al responsable seleccionado y al proyecto
+ */
+router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { nombre, descripcion, fecha_limite, prioridad, estado, projectId, responsableId } = req.body;
+  const usuario_id = req.user?.userId;
+
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
+  try {
+    if (!nombre || nombre.trim() === '') {
+      return res.status(400).json({ message: 'El nombre es obligatorio.' });
+    }
+
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaSeleccionada = new Date(fecha_limite);
+
+    if (!fecha_limite || fechaSeleccionada < hoy) {
+      return res.status(400).json({ message: 'La fecha límite no puede ser anterior a hoy.' });
+    }
+
+    const prioridadUpper = prioridad ? String(prioridad).toUpperCase() : 'MED';
+    const estadoUpper = estado ? mapStatusToPrisma(estado) : 'PENDING';
+    
+    // 🟢 Asigna al responsable seleccionado o al usuario creador por defecto
+    const usuarioAsignado = responsableId || usuario_id;
+
+    const actividad = await db.activity.create({
+      data: {
+        name: nombre.trim(),
+        description: descripcion?.trim() || null,
+        deadline: fechaSeleccionada,
+        priority: prioridadUpper as any,
+        status: estadoUpper,
+        projectId: projectId || null,
+        assignees: {
+          create: [{ userId: usuarioAsignado }],
+        },
+      },
+      include: INCLUDE_RELATIONS,
+    });
+
+    return res.status(201).json({ message: 'Actividad creada exitosamente.', actividad });
+  } catch (error) {
+    console.error('Error al crear actividad:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
+/**
+ * GET /api/actividades/:id
  */
 router.get('/:id', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const usuario_id = req.user?.userId;
- 
-  if (!id) {
-    return res.status(400).json({ message: 'ID de actividad requerido.' });
-  }
- 
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
- 
+
+  if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
   try {
     const actividad = await db.activity.findFirst({
-      where: {
-        id,
-        assignees: { some: { userId: usuario_id } },
-      },
-      include: INCLUDE_ASSIGNEES,
+      where: { id: id as string },
+      include: INCLUDE_RELATIONS,
     });
- 
-    if (!actividad) {
-      return res.status(404).json({ message: 'Actividad no encontrada.' });
-    }
- 
+
+    if (!actividad) return res.status(404).json({ message: 'Actividad no encontrada.' });
+
     return res.status(200).json({ actividad });
   } catch (error) {
-    console.error('Error al obtener actividad:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
- 
+
 /**
- * =========================================================================
- * ENDPOINT: POST /api/actividades/:id/responsables
- * Asigna un compañero como responsable adicional de la actividad (HU-015)
- * Escenario 2: nunca elimina ni duplica a los responsables ya asignados.
- * =========================================================================
+ * POST /api/actividades/:id/responsables
  */
 router.post('/:id/responsables', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const { userId } = req.body;
   const usuario_id = req.user?.userId;
- 
-  if (!id) {
-    return res.status(400).json({ message: 'ID de actividad requerido.' });
-  }
- 
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
- 
-  if (!userId) {
-    return res.status(400).json({ message: 'Debes seleccionar un compañero para asignar.' });
-  }
- 
+
+  if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+  if (!userId) return res.status(400).json({ message: 'Debes seleccionar un compañero para asignar.' });
+
   try {
-    // Solo un responsable actual de la actividad puede agregar a alguien más
     const actividad = await db.activity.findFirst({
-      where: { id, assignees: { some: { userId: usuario_id } } },
+      where: { id: id as string, assignees: { some: { userId: usuario_id } } },
     });
- 
-    if (!actividad) {
-      return res.status(404).json({ message: 'Actividad no encontrada.' });
-    }
- 
+
+    if (!actividad) return res.status(404).json({ message: 'Actividad no encontrada.' });
+
     const usuarioAAsignar = await db.user.findUnique({ where: { id: userId } });
-    if (!usuarioAAsignar) {
-      return res.status(404).json({ message: 'El usuario a asignar no existe.' });
-    }
- 
-    // Evita duplicar si ya es responsable (idempotente, sin sobreescribir a nadie más)
+    if (!usuarioAAsignar) return res.status(404).json({ message: 'El usuario a asignar no existe.' });
+
     const yaAsignado = await db.activityAssignee.findUnique({
-      where: { activityId_userId: { activityId: id, userId } },
+      where: { activityId_userId: { activityId: id as string, userId } },
     });
- 
+
     if (!yaAsignado) {
-      await db.activityAssignee.create({
-        data: { activityId: id, userId },
-      });
+      await db.activityAssignee.create({ data: { activityId: id as string, userId } });
     }
- 
+
     const actividadActualizada = await db.activity.findUnique({
-      where: { id },
-      include: INCLUDE_ASSIGNEES,
+      where: { id: id as string },
+      include: INCLUDE_RELATIONS,
     });
- 
-    return res.status(200).json({
-      message: 'Responsable asignado exitosamente.',
-      actividad: actividadActualizada,
-    });
- 
+
+    return res.status(200).json({ message: 'Responsable asignado exitosamente.', actividad: actividadActualizada });
   } catch (error) {
     console.error('Error al asignar responsable:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
- 
+
 /**
- * =========================================================================
- * ENDPOINT: PUT /api/actividades/:id
- * Edita una actividad existente (HU-013 Escenario 1)
- * =========================================================================
+ * PUT /api/actividades/:id
+ * Actualiza la actividad y reasigna el responsable si cambió
  */
 router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
-  const { nombre, descripcion, fecha_limite, estado, prioridad } = req.body;
+  const { nombre, descripcion, fecha_limite, estado, prioridad, projectId, responsableId } = req.body;
   const usuario_id = req.user?.userId;
- 
-  if (!id) {
-    return res.status(400).json({ message: 'ID de actividad requerido.' });
-  }
- 
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
- 
+
+  if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
   try {
     const actividadExistente = await db.activity.findFirst({
-      where: {
-        id,
-        assignees: { some: { userId: usuario_id } },
-      },
+      where: { id: id as string },
     });
- 
-    if (!actividadExistente) {
-      return res.status(404).json({ message: 'Actividad no encontrada.' });
-    }
- 
-    if (!nombre || nombre.trim() === '') {
-      return res.status(400).json({ message: 'El nombre es obligatorio.' });
-    }
- 
-    if (nombre.trim().length > 150) {
-      return res.status(400).json({ message: 'El nombre no puede superar los 150 caracteres.' });
-    }
- 
+
+    if (!actividadExistente) return res.status(404).json({ message: 'Actividad no encontrada.' });
+    if (!nombre || nombre.trim() === '') return res.status(400).json({ message: 'El nombre es obligatorio.' });
+
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
     const fechaSeleccionada = new Date(fecha_limite);
- 
+
     if (!fecha_limite || fechaSeleccionada < hoy) {
       return res.status(400).json({ message: 'La fecha límite no puede ser anterior a hoy.' });
     }
- 
-    const estadoUpper = estado ? String(estado).toUpperCase() : actividadExistente.status;
-    if (!VALID_STATUSES.includes(estadoUpper)) {
-      return res.status(400).json({
-        message: `Estado inválido. Debe ser uno de: ${VALID_STATUSES.join(', ')}`
-      });
-    }
- 
-    // HU-019: si no mandan prioridad, se conserva la que ya tenía la actividad
-    // (a diferencia de la creación, aquí NO se fuerza "MED" por default).
+
+    const estadoUpper = estado ? mapStatusToPrisma(estado) : actividadExistente.status;
     const prioridadUpper = prioridad ? String(prioridad).toUpperCase() : actividadExistente.priority;
-    if (!VALID_PRIORITIES.includes(prioridadUpper)) {
-      return res.status(400).json({
-        message: `Prioridad inválida. Debe ser una de: ${VALID_PRIORITIES.join(', ')}`
-      });
+
+    // 🟢 Si se envió un responsableId en la edición, actualizamos la tabla pivote
+    if (responsableId) {
+      await db.activityAssignee.deleteMany({ where: { activityId: id as string } });
+      await db.activityAssignee.create({ data: { activityId: id as string, userId: responsableId } });
     }
- 
+
     const actividadActualizada = await db.activity.update({
-      where: { id },
+      where: { id: id as string },
       data: {
         name: nombre.trim(),
         description: descripcion?.trim() || null,
         deadline: fechaSeleccionada,
-        status: estadoUpper as 'PENDING' | 'IN_PROCESS' | 'IN_REVIEW' | 'DONE',
-        priority: prioridadUpper as 'HIGH' | 'MED' | 'LOW',
+        status: estadoUpper as any,
+        priority: prioridadUpper as any,
+        projectId: projectId !== undefined ? (projectId || null) : actividadExistente.projectId,
       },
-      include: INCLUDE_ASSIGNEES,
+      include: INCLUDE_RELATIONS,
     });
- 
-    return res.status(200).json({
-      message: 'Actividad actualizada exitosamente.',
-      actividad: actividadActualizada,
-    });
- 
+
+    return res.status(200).json({ message: 'Actividad actualizada exitosamente.', actividad: actividadActualizada });
   } catch (error) {
     console.error('Error al actualizar actividad:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
- 
+
 /**
- * =========================================================================
- * ENDPOINT: DELETE /api/actividades/:id
- * Elimina una actividad existente (HU-013 Escenario 2)
- * =========================================================================
+ * DELETE /api/actividades/:id
  */
 router.delete('/:id', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const usuario_id = req.user?.userId;
- 
-  if (!id) {
-    return res.status(400).json({ message: 'ID de actividad requerido.' });
-  }
- 
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
- 
+
+  if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
   try {
     const actividadExistente = await db.activity.findFirst({
-      where: {
-        id,
-        assignees: { some: { userId: usuario_id } },
-      },
+      where: { id: id as string },
     });
- 
-    if (!actividadExistente) {
-      return res.status(404).json({ message: 'Actividad no encontrada.' });
-    }
- 
-    // onDelete: Cascade en el schema borra también sus activity_assignees, comments, evidence, status_history
-    await db.activity.delete({ where: { id } });
- 
+
+    if (!actividadExistente) return res.status(404).json({ message: 'Actividad no encontrada.' });
+
+    await db.activity.delete({ where: { id: id as string } });
     return res.status(200).json({ message: 'Actividad eliminada exitosamente.' });
- 
   } catch (error) {
     console.error('Error al eliminar actividad:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
- 
+
 /**
- * =========================================================================
- * ENDPOINT: GET /api/actividades/:id/comentarios
- * Lista los comentarios de una actividad en orden cronológico (HU-024)
- * =========================================================================
+ * COMENTARIOS
  */
 router.get('/:id/comentarios', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const usuario_id = req.user?.userId;
 
-  if (!id) {
-    return res.status(400).json({ message: 'ID de actividad requerido.' });
-  }
-
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
+  if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
 
   try {
-    // Solo un responsable de la actividad puede ver sus comentarios
-    const actividad = await db.activity.findFirst({
-      where: { id, assignees: { some: { userId: usuario_id } } },
-    });
-
-    if (!actividad) {
-      return res.status(404).json({ message: 'Actividad no encontrada.' });
-    }
-
     const comentarios = await db.comment.findMany({
-      where: { activityId: id },
+      where: { activityId: id as string },
       include: { author: { select: { id: true, name: true } } },
-      orderBy: { createdAt: 'asc' }, // Escenario 1: listado cronológico
+      orderBy: { createdAt: 'asc' },
     });
 
     return res.status(200).json({ comentarios });
   } catch (error) {
-    console.error('Error al obtener comentarios:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
 
-/**
- * =========================================================================
- * ENDPOINT: POST /api/actividades/:id/comentarios
- * Publica un nuevo comentario en una actividad (HU-024)
- * Escenario 2: rechaza contenido vacío o compuesto solo por espacios en blanco.
- * =========================================================================
- */
 router.post('/:id/comentarios', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const { contenido } = req.body;
   const usuario_id = req.user?.userId;
 
-  if (!id) {
-    return res.status(400).json({ message: 'ID de actividad requerido.' });
-  }
-
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
-
-  // Escenario 2: el backend valida esto también, aunque el frontend ya
-  // deshabilite el botón — nunca confiar solo en la validación del cliente.
-  if (!contenido || String(contenido).trim() === '') {
-    return res.status(400).json({ message: 'El comentario no puede estar vacío.' });
-  }
+  if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+  if (!contenido || String(contenido).trim() === '') return res.status(400).json({ message: 'El comentario no puede estar vacío.' });
 
   try {
-    // Solo un responsable de la actividad puede comentar en ella
-    const actividad = await db.activity.findFirst({
-      where: { id, assignees: { some: { userId: usuario_id } } },
-    });
-
-    if (!actividad) {
-      return res.status(404).json({ message: 'Actividad no encontrada.' });
-    }
-
     const comentario = await db.comment.create({
       data: {
         content: String(contenido).trim(),
-        activityId: id,
+        activityId: id as string,
         authorId: usuario_id,
       },
       include: { author: { select: { id: true, name: true } } },
     });
 
-    return res.status(201).json({
-      message: 'Comentario publicado exitosamente.',
-      comentario,
-    });
+    return res.status(201).json({ message: 'Comentario publicado exitosamente.', comentario });
   } catch (error) {
-    console.error('Error al publicar comentario:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
 
 /**
- * =========================================================================
- * ENDPOINT: DELETE /api/actividades/:id/comentarios/:comentarioId
- * Elimina un comentario propio (HU-025)
- * Escenario 2: nunca permite borrar comentarios de otro autor, aunque la
- * interfaz ya oculte el botón — la validación real vive aquí.
- * =========================================================================
- */
-router.delete('/:id/comentarios/:comentarioId', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
-  const { id, comentarioId } = req.params;
-  const usuario_id = req.user?.userId;
-
-  if (!id || !comentarioId) {
-    return res.status(400).json({ message: 'ID de actividad y de comentario requeridos.' });
-  }
-
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
-
-  try {
-    // Solo un responsable de la actividad puede operar sobre sus comentarios
-    const actividad = await db.activity.findFirst({
-      where: { id, assignees: { some: { userId: usuario_id } } },
-    });
-
-    if (!actividad) {
-      return res.status(404).json({ message: 'Actividad no encontrada.' });
-    }
-
-    const comentario = await db.comment.findFirst({
-      where: { id: comentarioId, activityId: id },
-    });
-
-    if (!comentario) {
-      return res.status(404).json({ message: 'Comentario no encontrado.' });
-    }
-
-    // Escenario 1 vs 2: solo el autor original puede eliminarlo
-    if (comentario.authorId !== usuario_id) {
-      return res.status(403).json({ message: 'No puedes eliminar comentarios de otro usuario.' });
-    }
-
-    await db.comment.delete({ where: { id: comentarioId } });
-
-    return res.status(200).json({ message: 'Comentario eliminado exitosamente.' });
-  } catch (error) {
-    console.error('Error al eliminar comentario:', error);
-    return res.status(500).json({ message: 'Error interno en el servidor.' });
-  }
-});
-
-// HU-027 escenario 2: la URL debe empezar con http:// o https://
-const URL_REGEX = /^https?:\/\/.+/i;
-
-/**
- * =========================================================================
- * ENDPOINT: GET /api/actividades/:id/evidencias
- * Lista las evidencias (enlaces) registradas en una actividad (HU-027)
- * =========================================================================
+ * EVIDENCIAS
  */
 router.get('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const usuario_id = req.user?.userId;
 
-  if (!id) {
-    return res.status(400).json({ message: 'ID de actividad requerido.' });
-  }
-
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
+  if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
 
   try {
-    const actividad = await db.activity.findFirst({
-      where: { id, assignees: { some: { userId: usuario_id } } },
-    });
-
-    if (!actividad) {
-      return res.status(404).json({ message: 'Actividad no encontrada.' });
-    }
-
     const evidencias = await db.evidence.findMany({
-      where: { activityId: id },
+      where: { activityId: id as string },
       include: { creator: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
     });
 
     return res.status(200).json({ evidencias });
   } catch (error) {
-    console.error('Error al obtener evidencias:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
 
-/**
- * =========================================================================
- * ENDPOINT: POST /api/actividades/:id/evidencias
- * Registra una URL de evidencia en una actividad (HU-027)
- * Escenario 2: rechaza cualquier texto que no tenga formato de URL válida.
- * =========================================================================
- */
 router.post('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const { url } = req.body;
   const usuario_id = req.user?.userId;
 
-  if (!id) {
-    return res.status(400).json({ message: 'ID de actividad requerido.' });
-  }
-
-  if (!usuario_id) {
-    return res.status(401).json({ message: 'Usuario no autenticado.' });
-  }
-
-  // Escenario 2: se valida en el servidor también, no solo en el formulario.
-  if (!url || !URL_REGEX.test(String(url).trim())) {
-    return res.status(400).json({ message: 'Por favor, ingresa una URL válida.' });
-  }
+  if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
 
   try {
-    const actividad = await db.activity.findFirst({
-      where: { id, assignees: { some: { userId: usuario_id } } },
-    });
-
-    if (!actividad) {
-      return res.status(404).json({ message: 'Actividad no encontrada.' });
-    }
-
     const evidencia = await db.evidence.create({
       data: {
         url: String(url).trim(),
-        activityId: id,
+        activityId: id as string,
         createdBy: usuario_id,
       },
       include: { creator: { select: { id: true, name: true } } },
     });
 
-    return res.status(201).json({
-      message: 'Evidencia registrada exitosamente.',
-      evidencia,
-    });
+    return res.status(201).json({ message: 'Evidencia registrada exitosamente.', evidencia });
   } catch (error) {
-    console.error('Error al registrar evidencia:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });

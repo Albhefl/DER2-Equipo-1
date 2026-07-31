@@ -1,184 +1,266 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom'; 
-import { 
-  ArrowLeft,
-  ShieldCheck
-} from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ShieldCheck, CheckCircle2, FileText, ExternalLink, Paperclip } from 'lucide-react';
+
+const API_ACTIVIDADES_URL = 'http://localhost:3000/api/actividades';
+
+interface Criterio {
+  id: string;
+  nombre: string;
+  score: number; // 1 a 5
+}
+
+interface Evidencia {
+  id: string;
+  url: string;
+  createdAt: string;
+  creator?: { id: string; name: string };
+}
+
+function formatearFecha(f?: string) {
+  if (!f) return 'Sin fecha límite';
+  const d = new Date(f);
+  return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
+}
 
 export const EvaluadorFormulario: React.FC = () => {
-  // 1. Estado para almacenar las notas de cada criterio
-  const [notas, setNotas] = useState<{ [key: string]: number }>({
-    'Funcionalidad': 4,
-    'Diseño e interfaz': 4,
-    'Código y estructura': 3,
-    'Pruebas unitarias': 4,
-    'Documentación': 2
-  });
+  const { id } = useParams<{ id: string }>(); // ID de la Actividad
+  const navigate = useNavigate();
 
-  // 2. Estado para el comentario de texto
-  const [comentario, setComentario] = useState(
-    'La funcionalidad de login cumple con los requisitos principales y fluye con correcto. El código tiene áreas bien estructuradas y en maduración. Se evidencia cobertura adecuada de pruebas. Sería importante mejorar la validación de mensajes de error y la accesibilidad en los formularios.'
-  );
+  const [actividad, setActividad] = useState<any>(null);
+  const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [comentario, setComentario] = useState('');
+  const [guardando, setGuardando] = useState(false);
 
-  // 3. Estado para calcular la nota final en base 10 de manera dinámica
-  const [calificacionFinal, setCalificacionFinal] = useState(6.8);
+  // Rúbrica por Criterios para la Actividad
+  const [criterios, setCriterios] = useState<Criterio[]>([
+    { id: 'funcionalidad', nombre: 'Funcionalidad', score: 4 },
+    { id: 'diseno', nombre: 'Diseño e interfaz', score: 4 },
+    { id: 'codigo', nombre: 'Código y estructura', score: 3 },
+    { id: 'pruebas', nombre: 'Pruebas unitarias', score: 4 },
+    { id: 'documentacion', nombre: 'Documentación', score: 2 },
+  ]);
 
-  // Recalcular la nota promedio cada vez que el usuario cambie un número del 1 al 5
   useEffect(() => {
-    const listaNotas = Object.values(notas);
-    const suma = listaNotas.reduce((acc, curr) => acc + curr, 0);
-    const promedioBase5 = suma / listaNotas.length;
-    const base10 = promedioBase5 * 2;
-    setCalificacionFinal(parseFloat(base10.toFixed(1)));
-  }, [notas]);
+    const cargarDatosActividadYEvidencias = async () => {
+      if (!id) return;
+      setCargando(true);
+      try {
+        const token = localStorage.getItem('token');
+        
+        // 1. Cargar detalle de la actividad
+        const resAct = await fetch(`${API_ACTIVIDADES_URL}/${id}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (resAct.ok) {
+          const dataAct = await resAct.json();
+          setActividad(dataAct.actividad);
+        }
 
-  const manejarCambioNota = (criterio: string, valor: number) => {
-    setNotas(prev => ({ ...prev, [criterio]: valor }));
+        // 2. Cargar evidencias de la actividad (HU-028)
+        const resEvi = await fetch(`${API_ACTIVIDADES_URL}/${id}/evidencias`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (resEvi.ok) {
+          const dataEvi = await resEvi.json();
+          setEvidencias(dataEvi.evidencias || []);
+        }
+
+      } catch (err) {
+        console.error('Error al obtener la actividad/evidencias:', err);
+      } finally {
+        setCargando(false);
+      }
+    };
+
+    cargarDatosActividadYEvidencias();
+  }, [id]);
+
+  const seleccionarScore = (criterioId: string, valor: number) => {
+    setCriterios(prev => prev.map(c => c.id === criterioId ? { ...c, score: valor } : c));
   };
 
-  const criteriosLista = [
-    'Funcionalidad',
-    'Diseño e interfaz',
-    'Código y estructura',
-    'Pruebas unitarias',
-    'Documentación'
-  ];
+  // Cálculo de Nota sobre 10 (Suma / 25 * 10)
+  const sumaTotal = criterios.reduce((acc, c) => acc + c.score, 0);
+  const notaFinal = ((sumaTotal / 25) * 10).toFixed(1);
+
+  const handleGuardarEvaluacion = async () => {
+    setGuardando(true);
+    setTimeout(() => {
+      alert(`¡Evaluación de "${actividad?.name}" guardada con éxito (${notaFinal} / 10)!`);
+      setGuardando(false);
+      navigate('/evaluador-evaluaciones');
+    }, 700);
+  };
+
+  if (cargando) {
+    return <div className="text-center py-20 text-xs text-gray-400 font-medium">Cargando actividad y evidencias...</div>;
+  }
+
+  const nombreActividad = actividad?.name || 'Actividad sin nombre';
+  const nombreProyecto = actividad?.project?.name || 'Proyecto general';
+  const responsable = actividad?.assignees?.[0]?.user?.name || 'Sin responsable asignado';
+  const estadoTexto = actividad?.status === 'DONE' ? 'Completado' : actividad?.status === 'IN_PROCESS' ? 'En proceso' : 'Pendiente';
 
   return (
-    // 🟢 CONTENEDOR FLUIDO GLOBAL
     <div className="w-full max-w-full space-y-6 box-border">
       
-      {/* TOPBAR ADAPTADO COMO CARD */}
-      <header className="bg-white border border-gray-100 rounded-2xl flex items-center justify-between p-4 md:p-6 shadow-sm shadow-gray-100/40">
-        <div className="flex items-center gap-2 text-xs text-gray-400 font-medium">
-          <span>Evaluaciones</span>
-          <span>&gt;</span>
-          <span className="text-gray-600 truncate max-w-[120px] sm:max-w-none">Funcionalidad de login</span>
-        </div>
-        <div className="flex items-center gap-3 pl-3 border-l border-gray-100">
-          <div className="w-9 h-9 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">MG</div>
-          <div className="hidden sm:block text-left">
-            <p className="text-sm font-semibold text-gray-900 leading-tight">María González</p>
-            <p className="text-xs text-gray-400">Evaluador</p>
-          </div>
-        </div>
-      </header>
-
-      {/* ENLACE DE REGRESO Y TÍTULO */}
+      {/* BOTÓN VOLVER Y TÍTULO */}
       <div className="space-y-1">
-        <Link to="/evaluador-evaluaciones" className="flex items-center gap-2 text-blue-600 text-xs font-bold hover:underline mb-1 w-fit">
+        <Link to="/evaluador-evaluaciones" className="inline-flex items-center gap-1.5 text-blue-600 text-xs font-bold hover:underline mb-1">
           <ArrowLeft size={14} /> Volver a evaluaciones
         </Link>
-        <h3 className="text-base font-bold text-gray-900 leading-none">Evaluar actividad</h3>
+        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Evaluar actividad</h1>
       </div>
 
-      {/* TARJETA ENCABEZADO PROYECTO (Grid responsivo: de 1 col en móvil a 4 en sm) */}
-      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-4">
-        <div className="flex items-center gap-4">
+      {/* CAJITA SUPERIOR CON METADATOS */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-5 w-full">
+        <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
-            <ShieldCheck size={22} />
+            <ShieldCheck size={20} />
           </div>
-          <h4 className="font-bold text-gray-900 text-[15px]">Funcionalidad de login</h4>
+          <div>
+            <h3 className="font-bold text-gray-900 text-base leading-tight">{nombreActividad}</h3>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-2 text-left">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-gray-50 text-xs">
           <div>
-            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-0.5">Proyecto</p>
-            <p className="text-xs font-bold text-gray-700">App Web Banco</p>
+            <p className="text-gray-400 font-medium">Proyecto</p>
+            <p className="font-bold text-gray-800 mt-0.5">{nombreProyecto}</p>
           </div>
           <div>
-            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-0.5">Equipo</p>
-            <p className="text-xs font-bold text-gray-700">Equipo Beta</p>
+            <p className="text-gray-400 font-medium">Responsable</p>
+            <p className="font-bold text-gray-800 mt-0.5">{responsable}</p>
           </div>
           <div>
-            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-0.5">Fecha de entrega</p>
-            <p className="text-xs font-bold text-gray-700">15 may 2025</p>
+            <p className="text-gray-400 font-medium">Fecha de entrega</p>
+            <p className="font-bold text-gray-800 mt-0.5">{formatearFecha(actividad?.deadline)}</p>
           </div>
           <div>
-            <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-0.5">Estado</p>
-            <p className="text-xs font-bold text-gray-700">Desarrollado</p>
+            <p className="text-gray-400 font-medium">Estado</p>
+            <p className="font-bold text-blue-600 mt-0.5">{estadoTexto}</p>
           </div>
-        </div>
-        <div className="pt-1">
-          <p className="text-[11px] text-gray-400 font-semibold uppercase tracking-wider mb-0.5">Responsable</p>
-          <p className="text-xs font-bold text-gray-700">Carina Flores</p>
         </div>
       </div>
 
-      {/* FORMULARIO DE EVALUACIÓN (TABLA RESPONSIVA) */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 p-6 space-y-6">
-        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Formulario de evaluación</h4>
-        
-        {/* Agregamos scroll horizontal en pantallas minúsculas para que las bolitas no se rompan */}
-        <div className="overflow-x-auto w-full">
-          <div className="space-y-4 min-w-[450px] sm:min-w-0">
-            
-            <div className="flex justify-between items-center text-xs text-gray-400 font-bold border-b border-gray-50 pb-2">
-              <span>Criterio a evaluar</span>
-              <div className="flex items-center gap-5 pr-2">
-                {[1, 2, 3, 4, 5].map(num => <span key={num} className="w-6 text-center">{num}</span>)}
+      {/* 🟢 HU-028: BLOQUE DE EVIDENCIAS ADJUNTAS POR EL ESTUDIANTE */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-3 w-full">
+        <div className="flex items-center gap-2">
+          <Paperclip size={15} className="text-blue-600" />
+          <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+            Evidencias adjuntas ({evidencias.length})
+          </h3>
+        </div>
+
+        {evidencias.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            {evidencias.map((ev) => (
+              <a
+                key={ev.id}
+                href={ev.url.startsWith('http') ? ev.url : `https://${ev.url}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between p-3 bg-gray-50 hover:bg-blue-50/60 border border-gray-100 hover:border-blue-200 rounded-xl transition group text-xs"
+              >
+                <div className="flex items-center gap-2.5 truncate min-w-0 pr-2">
+                  <FileText size={16} className="text-gray-400 group-hover:text-blue-600 shrink-0" />
+                  <span className="font-semibold text-gray-700 group-hover:text-blue-700 truncate">
+                    {ev.url}
+                  </span>
+                </div>
+                <ExternalLink size={14} className="text-gray-400 group-hover:text-blue-600 shrink-0" />
+              </a>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 italic py-1">
+            El estudiante aún no ha adjuntado enlaces de evidencia para esta actividad.
+          </p>
+        )}
+      </div>
+
+      {/* FORMULARIO DE EVALUACIÓN CON RÚBRICA */}
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-6 w-full">
+        <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Formulario de evaluación</h3>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-12 text-[11px] font-bold text-gray-400 uppercase border-b border-gray-100 pb-2.5">
+            <div className="col-span-6 sm:col-span-7">Criterio a evaluar</div>
+            <div className="col-span-6 sm:col-span-5 flex justify-between px-2">
+              <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+            </div>
+          </div>
+
+          {criterios.map((c) => (
+            <div key={c.id} className="grid grid-cols-12 items-center text-xs py-2 border-b border-gray-50">
+              <div className="col-span-6 sm:col-span-7 font-semibold text-gray-800">{c.nombre}</div>
+              <div className="col-span-6 sm:col-span-5 flex justify-between px-1">
+                {[1, 2, 3, 4, 5].map((val) => {
+                  const isSelected = c.score === val;
+                  return (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => seleccionarScore(c.id, val)}
+                      className={`w-7 h-7 rounded-full text-xs font-bold transition flex items-center justify-center cursor-pointer ${
+                        isSelected 
+                          ? 'bg-blue-600 text-white shadow-sm' 
+                          : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {val}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-
-            {criteriosLista.map((criterio) => (
-              <div key={criterio} className="flex justify-between items-center py-2 border-b border-b-gray-50/50">
-                <span className="text-xs font-semibold text-gray-600">{criterio}</span>
-                <div className="flex items-center gap-5 pr-2">
-                  {[1, 2, 3, 4, 5].map((num) => {
-                    const activo = notas[criterio] === num;
-                    return (
-                      <button
-                        key={num}
-                        onClick={() => manejarCambioNota(criterio, num)}
-                        className={`w-6 h-6 text-xs font-bold rounded-full flex items-center justify-center border transition-all ${
-                          activo 
-                            ? 'bg-blue-600 border-blue-600 text-white shadow-sm shadow-blue-100' 
-                            : 'bg-white border-gray-200 text-gray-400 hover:border-gray-300'
-                        }`}
-                      >
-                        {num}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-            
-          </div>
+          ))}
         </div>
 
-        <div className="pt-2">
-          <p className="text-xs font-bold text-gray-900">
-            Calificación final <span className="text-sm font-black text-blue-600 ml-1">{calificacionFinal}</span> <span className="text-gray-400 font-medium">/ 10</span>
-          </p>
+        {/* CALIFICACIÓN FINAL */}
+        <div className="pt-3 flex items-center justify-between border-t border-gray-100">
+          <span className="text-xs font-bold text-gray-700">Calificación final</span>
+          <div className="text-base font-bold text-gray-900">
+            <span className="text-blue-600 text-xl font-extrabold">{notaFinal}</span> / 10
+          </div>
         </div>
       </div>
 
       {/* COMENTARIOS DEL EVALUADOR */}
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 p-6 space-y-3">
-        <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Comentarios del evaluador</h4>
-        
-        <div className="relative">
-          <textarea
-            value={comentario}
-            onChange={(e) => setComentario(e.target.value.slice(0, 500))}
-            className="w-full h-28 p-4 bg-gray-50/50 border border-gray-100 rounded-xl text-xs font-medium text-gray-600 focus:outline-none focus:border-blue-400 focus:bg-white resize-none leading-relaxed"
-            placeholder="Escribe tus observaciones técnicas aquí..."
-          />
-          <span className="absolute bottom-3 right-4 text-[10px] text-gray-400 font-semibold tracking-tight">
-            {comentario.length}/500
-          </span>
+      <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-3 w-full">
+        <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Comentarios del evaluador</h3>
+        <textarea
+          rows={4}
+          value={comentario}
+          onChange={e => setComentario(e.target.value)}
+          placeholder="Escribe tus observaciones técnicas sobre esta actividad..."
+          className="w-full p-3 bg-gray-50/60 border border-gray-200 rounded-xl text-xs focus:outline-none focus:bg-white resize-none"
+        />
+        <div className="flex justify-between items-center text-[10px] text-gray-400 font-medium">
+          <span>Máximo 500 caracteres</span>
+          <span>{comentario.length}/500</span>
         </div>
+      </div>
 
-        {/* Botones adaptativos flex-col-reverse en móvil, flex-row en md */}
-        <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
-          <button type="button" className="px-4 py-2 text-xs font-bold text-gray-600 border border-gray-200 bg-white rounded-xl hover:bg-gray-50 transition-colors w-full sm:w-auto">
-            Guardar borrador
-          </button>
-          <button type="button" className="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 shadow-sm shadow-blue-100 transition-colors w-full sm:w-auto">
-            Enviar evaluación
-          </button>
-        </div>
+      {/* BOTONES */}
+      <div className="flex justify-end gap-3 pt-2">
+        <button
+          type="button"
+          onClick={() => navigate('/evaluador-evaluaciones')}
+          className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-xs font-bold hover:bg-gray-200 transition cursor-pointer"
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          onClick={handleGuardarEvaluacion}
+          disabled={guardando}
+          className="px-6 py-2.5 bg-black text-white rounded-xl text-xs font-bold hover:bg-gray-900 transition shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+        >
+          <CheckCircle2 size={14} /> {guardando ? 'Guardando...' : 'Guardar evaluación'}
+        </button>
       </div>
 
     </div>
