@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
@@ -8,12 +8,6 @@ import {
 } from 'lucide-react';
 
 // ─── MOCK DATA LOCAL OPTIMIZADO ──────────────────────────────────────────────
-const CHART_DATA = [
-  { name: "Pendientes", value: 7 },
-  { name: "En Proceso", value: 8 },
-  { name: "En Revisión", value: 4 },
-  { name: "Completados", value: 5 },
-];
 const CHART_COLORS = ["#94a3b8", "#3b82f6", "#f59e0b", "#22c55e"];
 
 const UPCOMING_ACTIVITIES = [
@@ -48,6 +42,43 @@ function StatCard({ label, value, color, icon }: { label: string; value: number;
 export const EstudianteDashboard: React.FC = () => {
   const navigate = useNavigate();
 
+  const [actividades, setActividades] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchActividades = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("http://localhost:3000/api/actividades", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const data = await response.json();
+        if (response.ok) {
+          setActividades(data.actividades || []);
+        }
+      } catch (error) {
+        console.error("Error al cargar actividades", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchActividades();
+  }, []);
+
+  const total = actividades.length;
+  const pendientes = actividades.filter(a => a.status === 'PENDING').length;
+  const enProceso = actividades.filter(a => a.status === 'IN_PROCESS').length;
+  const enRevision = actividades.filter(a => a.status === 'IN_REVIEW').length;
+  const completadas = actividades.filter(a => a.status === 'DONE').length;
+  const progresoPorcentaje = total === 0 ? 0 : Math.round((completadas / total) * 100);
+
+  const chartData = [
+    { name: "Pendientes", value: pendientes },
+    { name: "En Proceso", value: enProceso },
+    { name: "En Revisión", value: enRevision },
+    { name: "Completados", value: completadas },
+  ];
+
   return (
     <div className="w-full max-w-full space-y-6 box-border">
       
@@ -59,11 +90,11 @@ export const EstudianteDashboard: React.FC = () => {
 
       {/* METRICAS / STAT CARDS RESPONSIVAS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">
-        <StatCard label="Total de actividades" value={24} color="bg-indigo-50 text-indigo-600" icon={<ListChecks size={20} />} />
-        <StatCard label="Pendientes" value={7} color="bg-gray-50 text-gray-400" icon={<Clock size={20} />} />
-        <StatCard label="En proceso" value={8} color="bg-blue-50 text-blue-600" icon={<AlertCircle size={20} />} />
-        <StatCard label="En revisión" value={4} color="bg-amber-50 text-amber-600" icon={<Eye size={20} />} />
-        <StatCard label="Completadas" value={5} color="bg-green-50 text-green-600" icon={<CheckCircle2 size={20} />} />
+        <StatCard label="Total de actividades" value={total} color="bg-indigo-50 text-indigo-600" icon={<ListChecks size={20} />} />
+        <StatCard label="Pendientes" value={pendientes} color="bg-gray-50 text-gray-400" icon={<Clock size={20} />} />
+        <StatCard label="En proceso" value={enProceso} color="bg-blue-50 text-blue-600" icon={<AlertCircle size={20} />} />
+        <StatCard label="En revisión" value={enRevision} color="bg-amber-50 text-amber-600" icon={<Eye size={20} />} />
+        <StatCard label="Completadas" value={completadas} color="bg-green-50 text-green-600" icon={<CheckCircle2 size={20} />} />
       </div>
 
       {/* SECCIÓN INTERACTIVA DE DOS COLUMNAS */}
@@ -76,12 +107,12 @@ export const EstudianteDashboard: React.FC = () => {
           <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm shadow-gray-100/40">
             <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2 mb-4">Progreso del proyecto</h3>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-gray-400 font-semibold">16 de 24 actividades completadas</span>
-              <span className="text-sm font-black text-gray-900">67%</span>
+              <span className="text-xs text-gray-400 font-semibold">{completadas} de {total} actividades completadas</span>
+              <span className="text-sm font-black text-gray-900">{progresoPorcentaje}%</span>
             </div>
             <div className="h-3 bg-gray-100 rounded-full overflow-hidden w-full">
               {/* 🟢 Cambiado a bg-[#1a1d2e] para igualar el color de Figma */}
-              <div className="h-full bg-[#1a1d2e] rounded-full transition-all duration-500" style={{ width: "67%" }} />
+              <div className="h-full bg-[#1a1d2e] rounded-full transition-all duration-500" style={{ width: `${progresoPorcentaje}%` }} />
             </div>
           </div>
 
@@ -90,13 +121,13 @@ export const EstudianteDashboard: React.FC = () => {
             <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2 mb-4">Progreso por estado</h3>
             <div className="w-full h-[180px]">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={CHART_DATA} barSize={32}>
+                <BarChart data={chartData} barSize={32}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" vertical={false} />
                   <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 10, fontWeight: 600, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
                   <Tooltip cursor={{ fill: "#f8fafc" }} />
                   <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                    {CHART_DATA.map((_, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
+                    {chartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
