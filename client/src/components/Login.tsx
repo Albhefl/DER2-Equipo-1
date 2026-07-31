@@ -65,6 +65,11 @@ export const Login: React.FC = () => {
       // Si las credenciales son válidas, almacena el JSON Web Token de forma segura
       localStorage.setItem('token', resData.token);
 
+      // Almacena también los datos del usuario para el ProtectedRoute
+      if (resData.user) {
+        localStorage.setItem('user', JSON.stringify(resData.user));
+      }
+
       // 🔀 3. REDIRECCIÓN INTELIGENTE BASADA EN ROLES
       // El backend (Prisma) devuelve el enum Role en inglés: 'STUDENT' | 'EVALUATOR'
       // Lo pasamos a minúsculas para comparar limpio
