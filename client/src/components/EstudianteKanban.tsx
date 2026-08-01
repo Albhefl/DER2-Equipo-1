@@ -1,15 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter } from 'lucide-react';
 
-// ─── CONEXIÓN A LA API REAL (sin datos simulados) ───────────────────────────
 const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
 const API_USUARIOS_URL = "http://localhost:3000/api/usuarios";
 
 type EstadoActividad = "PENDING" | "IN_PROCESS" | "IN_REVIEW" | "DONE";
 type PrioridadActividad = "HIGH" | "MED" | "LOW";
 
-// HU-021 escenario 1: estos son exactamente los 4 estados/columnas del tablero
-// (Pendiente, En Proceso, En Revisión, Completado) con sus encabezados.
 const ESTADOS: EstadoActividad[] = ["PENDING", "IN_PROCESS", "IN_REVIEW", "DONE"];
 
 const ESTADO_LABELS: Record<EstadoActividad, string> = {
@@ -31,6 +29,7 @@ type Actividad = {
   deadline: string;
   status: EstadoActividad;
   priority?: PrioridadActividad;
+  projectId?: string | null;
   assignees: Responsable[];
 };
 
@@ -42,14 +41,12 @@ type EditDraft = {
   priority: PrioridadActividad;
 };
 
-// ─── UTILS DE ESTILOS ─────────────────────────────────────────────────────
 function priorityBg(p?: PrioridadActividad) {
   if (p === "HIGH") return "bg-red-50 text-red-600 border border-red-100";
   if (p === "LOW") return "bg-green-50 text-green-600 border border-green-100";
-  return "bg-amber-50 text-amber-600 border border-amber-100"; // MED o sin definir
+  return "bg-amber-50 text-amber-600 border border-amber-100";
 }
 
-// ── HU-017: indicador visual de vencimiento en tarjetas ──
 type VencimientoColor = "verde" | "naranja" | "rojo" | "neutral";
 
 function calcularVencimiento(deadline: string, status: EstadoActividad): { color: VencimientoColor; vencida: boolean } {
@@ -101,18 +98,17 @@ function mergeMiembros(previos: Miembro[], nuevos: Miembro[]): Miembro[] {
 }
 
 export const EstudianteKanban: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const projectIdParam = searchParams.get("projectId");
+
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
-  // ── HU-016: filtrado del tablero por responsable ──
   const [filtroResponsable, setFiltroResponsable] = useState("");
-
-  // ── HU-020: filtrado del tablero por nivel de prioridad ──
   const [filtroPrioridad, setFiltroPrioridad] = useState("");
 
-  // ── HU-018: ordenamiento del tablero por fecha límite ──
   type OrdenFecha = "" | "asc" | "desc";
   const [ordenFecha, setOrdenFecha] = useState<OrdenFecha>("");
 
@@ -231,7 +227,6 @@ export const EstudianteKanban: React.FC = () => {
     }
   };
 
-  // ── HU-019: modal de creación con campo de Prioridad ──
   type CreateDraft = { name: string; description: string; deadline: string; priority: PrioridadActividad };
   const [createModal, setCreateModal] = useState<EstadoActividad | null>(null);
   const [createDraft, setCreateDraft] = useState<CreateDraft>({ name: "", description: "", deadline: "", priority: "MED" });
@@ -264,6 +259,7 @@ export const EstudianteKanban: React.FC = () => {
           fecha_limite: createDraft.deadline,
           estado: createModal,
           prioridad: createDraft.priority,
+          projectId: projectIdParam || null
         }),
       });
       const data = await response.json();
@@ -295,11 +291,12 @@ export const EstudianteKanban: React.FC = () => {
 
   return (
     <div className="w-full max-w-full space-y-6 box-border">
-      {/* HEADER ENCABEZADO */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tablero Kanban</h1>
-          <p className="text-sm text-gray-500 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
+          <p className="text-sm text-gray-500 font-medium mt-0.5">
+            {projectIdParam ? "Filtrado por proyecto seleccionado" : "Proyecto: ClassBoard Equipo A"}
+          </p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-wrap">
           <div className="relative w-full sm:w-44">
@@ -312,7 +309,6 @@ export const EstudianteKanban: React.FC = () => {
             />
           </div>
 
-          {/* HU-016.1: control de filtro por responsable */}
           <div className="relative w-full sm:w-40">
             <UserPlus size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <select
@@ -325,7 +321,6 @@ export const EstudianteKanban: React.FC = () => {
             </select>
           </div>
 
-          {/* HU-020: control de filtro por prioridad */}
           <div className="relative w-full sm:w-40">
             <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <select
@@ -340,7 +335,6 @@ export const EstudianteKanban: React.FC = () => {
             </select>
           </div>
 
-          {/* HU-018: ordenamiento del tablero por fecha límite */}
           <div className="relative w-full sm:w-48">
             <ArrowUpDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <select
@@ -354,7 +348,6 @@ export const EstudianteKanban: React.FC = () => {
             </select>
           </div>
 
-          {/* HU-016 y HU-020: limpiar filtros aplicados */}
           {(filtroResponsable || filtroPrioridad) && (
             <button
               type="button"
@@ -378,20 +371,14 @@ export const EstudianteKanban: React.FC = () => {
         </div>
       ) : (
         <>
-          {/* REJILLA RESPONSIVA DE COLUMNAS */}
-          {/* HU-021 escenario 1: se renderizan las 4 columnas (Pendiente, En Proceso,
-              En Revisión, Completado) con su encabezado, siempre, sin importar los datos. */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full items-start box-border">
             {ESTADOS.map(estado => {
               const style = columnStyle(estado);
 
-              // HU-021 escenario 2: "a.status === estado" es lo que ubica automáticamente
-              // cada tarjeta en la columna que corresponde a su estado actual, sin lógica
-              // manual de "mover" tarjetas entre columnas.
-              // HU-016 y HU-020: filtrado encadenado (AND) por título, responsable y prioridad.
               const filteredCards = actividades
                 .filter(a =>
                   a.status === estado &&
+                  (!projectIdParam || a.projectId === projectIdParam) &&
                   a.name.toLowerCase().includes(search.toLowerCase()) &&
                   (!filtroResponsable || a.assignees.some(r => r.user.id === filtroResponsable)) &&
                   (!filtroPrioridad || (a.priority || "MED") === filtroPrioridad)
@@ -405,7 +392,6 @@ export const EstudianteKanban: React.FC = () => {
 
               return (
                 <div key={estado} className={`flex flex-col rounded-2xl border ${style.border} bg-white shadow-sm shadow-gray-100/30 overflow-hidden w-full`}>
-                  {/* HEADER DE COLUMNA — HU-021 escenario 1: encabezado con nombre del estado */}
                   <div className={`px-4 py-3 flex items-center justify-between border-b border-inherit ${style.header}`}>
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${style.dot}`} />
@@ -414,7 +400,6 @@ export const EstudianteKanban: React.FC = () => {
                     <span className="text-xs font-bold bg-white border border-inherit px-2 py-0.5 rounded-full text-gray-500 shadow-sm">{filteredCards.length}</span>
                   </div>
 
-                  {/* CUERPO DE TARJETAS */}
                   <div className="p-3 flex flex-col gap-3 min-h-37.5 max-h-125 overflow-y-auto bg-gray-50/30">
                     {filteredCards.map(card => {
                       const venc = calcularVencimiento(card.deadline, card.status);
@@ -453,7 +438,6 @@ export const EstudianteKanban: React.FC = () => {
                           </span>
                         </div>
 
-                        {/* HU-017: indicador de color por proximidad a la fecha límite */}
                         <div className={`flex items-center gap-1.5 pt-1 border-t border-gray-50 text-[10px] font-bold tracking-tight ${estilosVenc.text}`}>
                           <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${estilosVenc.dot}`} />
                           <Clock size={10} className="shrink-0" />
@@ -475,7 +459,6 @@ export const EstudianteKanban: React.FC = () => {
                     )}
                   </div>
 
-                  {/* ACCIÓN AÑADIR ACTIVIDAD */}
                   <div className="p-2 border-t border-inherit bg-gray-50/50">
                     <button
                       onClick={() => openCreate(estado)}
@@ -492,7 +475,6 @@ export const EstudianteKanban: React.FC = () => {
         </>
       )}
 
-      {/* VENTANA MODAL PARA EDICIÓN DE TARJETAS */}
       {editModal && editDraft && (
         <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeEdit}>
           <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
@@ -593,7 +575,6 @@ export const EstudianteKanban: React.FC = () => {
         </div>
       )}
 
-      {/* VENTANA MODAL PARA CREAR ACTIVIDAD */}
       {createModal && (
         <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeCreate}>
           <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>

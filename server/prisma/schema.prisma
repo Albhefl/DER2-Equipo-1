@@ -38,7 +38,50 @@ model User {
   evidenceUploaded   Evidence[]
   statusChanges      StatusHistory[]
 
+  // Relaciones con Proyectos
+  projectsMember     ProjectMember[]
+  projectsEvaluating ProjectEvaluator[]
+
   @@map("users")
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  status      Status    @default(PENDING)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  members    ProjectMember[]
+  evaluators ProjectEvaluator[]
+  activities Activity[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String @map("project_id")
+  userId    String @map("user_id")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_members")
+}
+
+model ProjectEvaluator {
+  projectId String @map("project_id")
+  userId    String @map("user_id")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_evaluators")
 }
 
 model Activity {
@@ -52,6 +95,7 @@ model Activity {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
+  project       Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   assignees     ActivityAssignee[]
   comments      Comment[]
   evidence      Evidence[]
@@ -60,7 +104,6 @@ model Activity {
   @@map("activities")
 }
 
-// Tabla pivote: relación many-to-many entre Activity y User
 model ActivityAssignee {
   activityId String @map("activity_id")
   userId     String @map("user_id")

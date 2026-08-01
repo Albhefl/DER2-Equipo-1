@@ -19,8 +19,11 @@ import { LayoutEstudiante } from './components/LayoutEstudiante';
 import { EstudianteDashboard } from './components/EstudianteDashboard'; 
 import { EstudianteKanban } from './components/EstudianteKanban'; 
 import { 
-  ProyectosPage, ActividadesPage, EntregasPage, CalendarioPage, PerfilPage 
+  ActividadesPage, EntregasPage, CalendarioPage, PerfilPage 
 } from './components/EstudianteVistas';
+
+// 🟢 Nuevo componente modular para la gestión de proyectos
+import { EstudianteProyectos } from './components/EstudianteProyectos';
 
 function App() {
   return (
@@ -41,7 +44,8 @@ function App() {
           <Route path="/evaluador-proyectos" element={<EvaluadorProyectos />} />
           <Route path="/evaluador-detalle" element={<EvaluadorDetalleProyecto />} />
           <Route path="/evaluador-evaluaciones" element={<EvaluadorEvaluaciones />} />
-          <Route path="/evaluador-formulario" element={<EvaluadorFormulario />} />
+          {/* HU-028: recibe el id real de la actividad a evaluar */}
+          <Route path="/evaluador-formulario/:id" element={<EvaluadorFormulario />} />
           <Route path="/evaluador-perfil" element={<EvaluadorPerfil />} />
           <Route path="/evaluador-perfil/editar" element={<EditarPerfilEvaluador />} />
         </Route>
@@ -55,7 +59,8 @@ function App() {
           }
         >
           <Route path="/estudiante-dashboard" element={<EstudianteDashboard />} />
-          <Route path="/estudiante-proyectos" element={<ProyectosPage />} />
+          {/* 🟢 Conectamos aquí el nuevo archivo de EstudianteProyectos */}
+          <Route path="/estudiante-proyectos" element={<EstudianteProyectos />} />
           <Route path="/estudiante-actividades" element={<ActividadesPage />} />
           <Route path="/estudiante-entregas" element={<EntregasPage />} />
           <Route path="/estudiante-calendario" element={<CalendarioPage />} />
