@@ -19,11 +19,13 @@ import { LayoutEstudiante } from './components/LayoutEstudiante';
 import { EstudianteDashboard } from './components/EstudianteDashboard'; 
 import { EstudianteKanban } from './components/EstudianteKanban'; 
 import { 
-  ActividadesPage, EntregasPage, CalendarioPage, PerfilPage 
+  ActividadesPage, EntregasPage 
 } from './components/EstudianteVistas';
 
-// 🟢 Nuevo componente modular para la gestión de proyectos
+// 🟢 Nuevos componentes modulares del estudiante
 import { EstudianteProyectos } from './components/EstudianteProyectos';
+import { CalendarioFuncional } from './components/CalendarioFuncional';
+import { EstudiantePerfil } from './components/EstudiantePerfil';
 
 function App() {
   return (
@@ -59,13 +61,15 @@ function App() {
           }
         >
           <Route path="/estudiante-dashboard" element={<EstudianteDashboard />} />
-          {/* 🟢 Conectamos aquí el nuevo archivo de EstudianteProyectos */}
           <Route path="/estudiante-proyectos" element={<EstudianteProyectos />} />
           <Route path="/estudiante-actividades" element={<ActividadesPage />} />
           <Route path="/estudiante-entregas" element={<EntregasPage />} />
-          <Route path="/estudiante-calendario" element={<CalendarioPage />} />
+          
+          {/* 🟢 RUTAS FUNCIONALES NUEVAS */}
+          <Route path="/estudiante-calendario" element={<CalendarioFuncional />} />
+          <Route path="/estudiante-perfil" element={<EstudiantePerfil />} />
+          
           <Route path="/estudiante-kanban" element={<EstudianteKanban />} />
-          <Route path="/estudiante-perfil" element={<PerfilPage />} />
         </Route>
 
         {/* Redirección por defecto */}
