@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter } from 'lucide-react';
+import { ProgressBar } from './ProgressBar'; // 🟢 HU-030: Componente de la Barra de Progreso
 
 const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
 const API_USUARIOS_URL = "http://localhost:3000/api/usuarios";
@@ -289,8 +290,15 @@ export const EstudianteKanban: React.FC = () => {
     ? miembrosEquipo.filter(m => !editModal.assignees.some(r => r.user.id === m.id))
     : [];
 
+  // 🟢 HU-030: Cálculo dinámico de actividades del proyecto
+  const actividadesVisibles = actividades.filter(a => !projectIdParam || a.projectId === projectIdParam);
+  const totalActividadesProyecto = actividadesVisibles.length;
+  const completadasActividadesProyecto = actividadesVisibles.filter(a => a.status === 'DONE').length;
+
   return (
     <div className="w-full max-w-full space-y-6 box-border">
+      
+      {/* ENCABEZADO Y FILTROS */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tablero Kanban</h1>
@@ -298,6 +306,7 @@ export const EstudianteKanban: React.FC = () => {
             {projectIdParam ? "Filtrado por proyecto seleccionado" : "Proyecto: ClassBoard Equipo A"}
           </p>
         </div>
+
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-wrap">
           <div className="relative w-full sm:w-44">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -363,6 +372,15 @@ export const EstudianteKanban: React.FC = () => {
         </div>
       </div>
 
+      {/* 🟢 HU-030: BARRA DE PROGRESO GENERAL DEL PROYECTO */}
+      {!loading && !errorCarga && (
+        <ProgressBar
+          totalActividades={totalActividadesProyecto}
+          completadasActividades={completadasActividadesProyecto}
+        />
+      )}
+
+      {/* TABLERO KANBAN */}
       {loading ? (
         <div className="text-center py-10 text-xs text-gray-400 font-medium">Cargando tablero...</div>
       ) : errorCarga ? (
@@ -475,6 +493,7 @@ export const EstudianteKanban: React.FC = () => {
         </>
       )}
 
+      {/* MODAL EDITAR */}
       {editModal && editDraft && (
         <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeEdit}>
           <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
@@ -575,6 +594,7 @@ export const EstudianteKanban: React.FC = () => {
         </div>
       )}
 
+      {/* MODAL CREAR */}
       {createModal && (
         <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeCreate}>
           <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
