@@ -64,7 +64,7 @@ export const Login: React.FC = () => {
 
       // 🟢 1. GUARDAR TOKEN Y DATOS DE USUARIO EN LOCALSTORAGE
       localStorage.setItem('token', resData.token);
-      
+
       const userData = resData.user || { role: resData.role };
       localStorage.setItem('user', JSON.stringify(userData));
 

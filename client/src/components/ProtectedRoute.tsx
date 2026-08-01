@@ -19,7 +19,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, rolPer
 
   try {
     const parsedUser = JSON.parse(userStorage);
-    usuarioRolRaw = String(parsedUser.role || '').toUpperCase(); // Captura "EVALUATOR" o "STUDENT"
+    usuarioRolRaw = String(parsedUser.role || parsedUser.rol || '').toUpperCase().trim();
   } catch (e) {
     console.error("Error al parsear el usuario de localStorage", e);
     return <Navigate to="/login" replace />;
@@ -36,7 +36,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, rolPer
   }
 
   if (rolPermitido === 'estudiante' && !esEstudiante) {
-    return <Navigate to="/evaluador-dashboard" replace />;
+    return <Navigate to="/evaluador-evaluaciones" replace />;
   }
 
   // Si pasa las validaciones, renderiza la vista solicitada

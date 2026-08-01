@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, ShieldCheck, CheckCircle2, FileText, ExternalLink, Paperclip } from 'lucide-react';
+import { 
+  ArrowLeft, ShieldCheck, CheckCircle2, FileText, ExternalLink, Paperclip 
+} from 'lucide-react';
 
 const API_ACTIVIDADES_URL = 'http://localhost:3000/api/actividades';
 
@@ -13,7 +15,7 @@ interface Criterio {
 interface Evidencia {
   id: string;
   url: string;
-  createdAt: string;
+  createdAt?: string;
   creator?: { id: string; name: string };
 }
 
@@ -145,7 +147,7 @@ export const EvaluadorFormulario: React.FC = () => {
         </div>
       </div>
 
-      {/* 🟢 HU-028: BLOQUE DE EVIDENCIAS ADJUNTAS POR EL ESTUDIANTE */}
+      {/* 🟢 HU-028: BLOQUE DE EVIDENCIAS ADJUNTAS REALES */}
       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-3 w-full">
         <div className="flex items-center gap-2">
           <Paperclip size={15} className="text-blue-600" />
@@ -159,7 +161,7 @@ export const EvaluadorFormulario: React.FC = () => {
             {evidencias.map((ev) => (
               <a
                 key={ev.id}
-                href={ev.url.startsWith('http') ? ev.url : `https://${ev.url}`}
+                href={ev.url.startsWith('http') ? ev.url : `http://localhost:3000/uploads/${ev.url}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 bg-gray-50 hover:bg-blue-50/60 border border-gray-100 hover:border-blue-200 rounded-xl transition group text-xs"
@@ -176,47 +178,49 @@ export const EvaluadorFormulario: React.FC = () => {
           </div>
         ) : (
           <p className="text-xs text-gray-400 italic py-1">
-            El estudiante aún no ha adjuntado enlaces de evidencia para esta actividad.
+            El estudiante aún no ha adjuntado enlaces o archivos de evidencia para esta actividad.
           </p>
         )}
       </div>
 
-      {/* FORMULARIO DE EVALUACIÓN CON RÚBRICA */}
+      {/* FORMULARIO DE EVALUACIÓN CON RÚBRICA Y TABLA RESPONSIVA */}
       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-6 w-full">
         <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Formulario de evaluación</h3>
 
-        <div className="space-y-4">
-          <div className="grid grid-cols-12 text-[11px] font-bold text-gray-400 uppercase border-b border-gray-100 pb-2.5">
-            <div className="col-span-6 sm:col-span-7">Criterio a evaluar</div>
-            <div className="col-span-6 sm:col-span-5 flex justify-between px-2">
-              <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
-            </div>
-          </div>
-
-          {criterios.map((c) => (
-            <div key={c.id} className="grid grid-cols-12 items-center text-xs py-2 border-b border-gray-50">
-              <div className="col-span-6 sm:col-span-7 font-semibold text-gray-800">{c.nombre}</div>
-              <div className="col-span-6 sm:col-span-5 flex justify-between px-1">
-                {[1, 2, 3, 4, 5].map((val) => {
-                  const isSelected = c.score === val;
-                  return (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => seleccionarScore(c.id, val)}
-                      className={`w-7 h-7 rounded-full text-xs font-bold transition flex items-center justify-center cursor-pointer ${
-                        isSelected 
-                          ? 'bg-blue-600 text-white shadow-sm' 
-                          : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100'
-                      }`}
-                    >
-                      {val}
-                    </button>
-                  );
-                })}
+        <div className="overflow-x-auto w-full">
+          <div className="space-y-4 min-w-[450px] sm:min-w-0">
+            <div className="grid grid-cols-12 text-[11px] font-bold text-gray-400 uppercase border-b border-gray-100 pb-2.5">
+              <div className="col-span-6 sm:col-span-7">Criterio a evaluar</div>
+              <div className="col-span-6 sm:col-span-5 flex justify-between px-2">
+                <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
               </div>
             </div>
-          ))}
+
+            {criterios.map((c) => (
+              <div key={c.id} className="grid grid-cols-12 items-center text-xs py-2 border-b border-gray-50">
+                <div className="col-span-6 sm:col-span-7 font-semibold text-gray-800">{c.nombre}</div>
+                <div className="col-span-6 sm:col-span-5 flex justify-between px-1">
+                  {[1, 2, 3, 4, 5].map((val) => {
+                    const isSelected = c.score === val;
+                    return (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => seleccionarScore(c.id, val)}
+                        className={`w-7 h-7 rounded-full text-xs font-bold transition flex items-center justify-center cursor-pointer ${
+                          isSelected 
+                            ? 'bg-blue-600 text-white shadow-sm' 
+                            : 'bg-gray-50 border border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {val}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* CALIFICACIÓN FINAL */}
@@ -244,7 +248,7 @@ export const EvaluadorFormulario: React.FC = () => {
         </div>
       </div>
 
-      {/* BOTONES */}
+      {/* BOTONES DE ACCIÓN */}
       <div className="flex justify-end gap-3 pt-2">
         <button
           type="button"
