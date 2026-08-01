@@ -26,16 +26,11 @@ type Actividad = {
   status: EstadoActividad;
   assignees: Responsable[];
   projectId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 const CHART_COLORS = ["#94a3b8", "#3b82f6", "#f59e0b", "#22c55e"];
-
-const RECENT_LOG = [
-  { action: "Completaste 'Investigar usuarios'", time: "Hoy, 10:15" },
-  { action: "Actualizaste 'Definir alcance'", time: "Hoy, 09:40" },
-  { action: "'Diseño de la interfaz' en revisión", time: "Ayer, 18:00" },
-  { action: "Nueva actividad agregada: 'Pruebas'", time: "Ayer, 16:20" },
-];
 
 function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
   return (
@@ -108,6 +103,32 @@ export const EstudianteDashboard: React.FC = () => {
     .filter(a => a.status !== 'DONE')
     .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
     .slice(0, 3);
+
+  // 🟢 ACTIVIDAD RECIENTE DINÁMICA BASADA EN LAS ACTIVIDADES REALES
+  const recentLogs = [...actividadesVisibles]
+    .sort((a, b) => {
+      const dateA = new Date(a.updatedAt || a.createdAt || a.deadline).getTime();
+      const dateB = new Date(b.updatedAt || b.createdAt || b.deadline).getTime();
+      return dateB - dateA;
+    })
+    .slice(0, 4)
+    .map(a => {
+      const fecha = new Date(a.updatedAt || a.createdAt || a.deadline);
+      const fechaFormateada = fecha.toLocaleDateString("es-MX", { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const horaFormateada = fecha.toLocaleTimeString("es-MX", { hour: '2-digit', minute: '2-digit' });
+
+      let action = `Se actualizó '${a.name}'`;
+      if (a.status === 'DONE') action = `Completaste '${a.name}'`;
+      else if (a.status === 'IN_REVIEW') action = `'${a.name}' en revisión`;
+      else if (a.status === 'IN_PROCESS') action = `Actualizaste '${a.name}'`;
+      else if (a.status === 'PENDING') action = `Nueva actividad: '${a.name}'`;
+
+      return {
+        id: a.id,
+        action,
+        time: `${fechaFormateada}, ${horaFormateada}`
+      };
+    });
 
   return (
     <div className="w-full max-w-full space-y-6 box-border">
@@ -218,22 +239,26 @@ export const EstudianteDashboard: React.FC = () => {
                 </button>
               </div>
 
-              {/* ACTIVIDAD RECIENTE */}
+              {/* 🟢 ACTIVIDAD RECIENTE REAL Y DINÁMICA */}
               <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow-sm shadow-gray-100/40">
                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2 mb-4">
                   Actividad reciente
                 </h3>
-                <div className="space-y-4">
-                  {RECENT_LOG.map((l, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold text-gray-700 leading-snug">{l.action}</p>
-                        <p className="text-[10px] text-gray-400 font-bold mt-0.5">{l.time}</p>
+                {recentLogs.length > 0 ? (
+                  <div className="space-y-4">
+                    {recentLogs.map((l) => (
+                      <div key={l.id} className="flex items-start gap-3">
+                        <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-gray-700 leading-snug">{l.action}</p>
+                          <p className="text-[10px] text-gray-400 font-bold mt-0.5">{l.time}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 py-3 text-center">No hay actividad reciente registrada.</p>
+                )}
               </div>
 
             </div>

@@ -1,13 +1,55 @@
 import { Router, type Response } from 'express';
 import db from '../src/db.js';
 import { verificarToken, type AuthRequest } from '../middleware/auth.js';
+import multer, { type FileFilterCallback } from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// TIPO EXTENDIDO: AuthRequest no incluye 'file' (lo agrega multer en runtime).
+// En vez de modificar middleware/auth.ts, extendemos el tipo aquí mismo.
+// ---------------------------------------------------------------------------
+type AuthRequestConArchivo = AuthRequest & { file?: Express.Multer.File };
+
+// ---------------------------------------------------------------------------
+// CONFIGURACIÓN DE SUBIDA DE ARCHIVOS (multer)
+// ---------------------------------------------------------------------------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Carpeta donde se guardan físicamente los archivos subidos
+const uploadsDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, uploadsDir),
+  filename: (_req, file, cb) => {
+    // Nombre único para evitar colisiones/sobrescrituras entre usuarios
+    const nombreUnico = `${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`;
+    cb(null, nombreUnico);
+  }
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB máx por archivo
+  fileFilter: (_req, file, cb: FileFilterCallback) => {
+    const permitidos = /\.(pdf|docx?|png|jpe?g|zip)$/i;
+    if (!permitidos.test(file.originalname)) {
+      return cb(new Error('Formato de archivo no permitido.'));
+    }
+    cb(null, true);
+  }
+});
 
 // Incluye asignados y la información básica del Proyecto al que pertenece la actividad
 const INCLUDE_RELATIONS = {
   assignees: { include: { user: { select: { id: true, name: true } } } },
   project: { select: { id: true, name: true } },
+  evidence: true,
 };
 
 /**
@@ -198,8 +240,8 @@ router.get('/', verificarToken, async (req: AuthRequest, res: Response): Promise
   if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
 
   try {
-    const where = rol === 'EVALUATOR' 
-      ? {} 
+    const where = rol === 'EVALUATOR'
+      ? {}
       : {
           OR: [
             { project: { members: { some: { userId: usuario_id } } } },
@@ -245,8 +287,8 @@ router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promis
 
     const prioridadUpper = prioridad ? String(prioridad).toUpperCase() : 'MED';
     const estadoUpper = estado ? mapStatusToPrisma(estado) : 'PENDING';
-    
-    // 🟢 Asigna al responsable seleccionado o al usuario creador por defecto
+
+    // Asigna al responsable seleccionado o al usuario creador por defecto
     const usuarioAsignado = responsableId || usuario_id;
 
     const actividad = await db.activity.create({
@@ -368,7 +410,7 @@ router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Prom
     const estadoUpper = estado ? mapStatusToPrisma(estado) : actividadExistente.status;
     const prioridadUpper = prioridad ? String(prioridad).toUpperCase() : actividadExistente.priority;
 
-    // 🟢 Si se envió un responsableId en la edición, actualizamos la tabla pivote
+    // Si se envió un responsableId en la edición, actualizamos la tabla pivote
     if (responsableId) {
       await db.activityAssignee.deleteMany({ where: { activityId: id as string } });
       await db.activityAssignee.create({ data: { activityId: id as string, userId: responsableId } });
@@ -490,6 +532,10 @@ router.get('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Resp
   }
 });
 
+/**
+ * POST /api/actividades/:id/evidencias
+ * Registra una evidencia por URL/enlace externo (Figma, Drive, Gemini, etc.)
+ */
 router.post('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const { url } = req.body;
@@ -497,6 +543,7 @@ router.post('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Res
 
   if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
   if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+  if (!url || String(url).trim() === '') return res.status(400).json({ message: 'La URL de la evidencia es obligatoria.' });
 
   try {
     const evidencia = await db.evidence.create({
@@ -510,6 +557,75 @@ router.post('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Res
 
     return res.status(201).json({ message: 'Evidencia registrada exitosamente.', evidencia });
   } catch (error) {
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
+/**
+ * POST /api/actividades/:id/evidencias/upload
+ * Sube un ARCHIVO REAL (PDF, DOCX, PNG, ZIP) y crea el registro de evidencia
+ * apuntando al nombre físico guardado en disco.
+ */
+router.post(
+  '/:id/evidencias/upload',
+  verificarToken,
+  upload.single('file'),
+  async (req: any, res: Response): Promise<any> => {
+    const { id } = req.params;
+    const usuario_id = req.user?.userId;
+
+    if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+    if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+    if (!req.file) return res.status(400).json({ message: 'No se recibió ningún archivo.' });
+
+    try {
+      const evidencia = await db.evidence.create({
+        data: {
+          url: req.file.filename, // nombre único real guardado en /uploads
+          activityId: id as string,
+          createdBy: usuario_id,
+        },
+        include: { creator: { select: { id: true, name: true } } },
+      });
+
+      return res.status(201).json({ message: 'Evidencia subida exitosamente.', evidencia });
+    } catch (error) {
+      console.error('Error al subir evidencia:', error);
+      return res.status(500).json({ message: 'Error interno en el servidor.' });
+    }
+  }
+);
+
+/**
+ * DELETE /api/actividades/evidencias/:evidenciaId
+ * Elimina el registro de evidencia y, si es un archivo local, también el archivo físico en disco.
+ */
+router.delete('/evidencias/:evidenciaId', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { evidenciaId } = req.params;
+  const usuario_id = req.user?.userId;
+
+  // Este guard, además de validar, hace que TS reduzca el tipo de
+  // evidenciaId de "string | undefined" a "string" en el resto de la función
+  // (necesario porque el tsconfig tiene noUncheckedIndexedAccess activado).
+  if (!evidenciaId) return res.status(400).json({ message: 'ID de evidencia requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
+  try {
+    const evidencia = await db.evidence.findUnique({ where: { id: evidenciaId } });
+    if (!evidencia) return res.status(404).json({ message: 'Evidencia no encontrada.' });
+
+    // Si no es un link externo (http/https), intenta borrar también el archivo físico
+    if (!evidencia.url.startsWith('http')) {
+      const filePath = path.join(uploadsDir, evidencia.url);
+      fs.unlink(filePath, (err) => {
+        if (err) console.warn('No se pudo borrar el archivo físico:', err.message);
+      });
+    }
+
+    await db.evidence.delete({ where: { id: evidenciaId } });
+    return res.status(200).json({ message: 'Evidencia eliminada exitosamente.' });
+  } catch (error) {
+    console.error('Error al eliminar evidencia:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
