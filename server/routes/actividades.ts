@@ -665,4 +665,62 @@ router.delete('/evidencias/:evidenciaId', verificarToken, async (req: AuthReques
   }
 });
 
+
+/**
+ * POST /api/actividades/:id/evaluar
+ * Guarda la calificación, rúbrica, comentarios y cambia el estado a DONE
+ */
+router.post('/:id/evaluar', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const { score, criterios, comentario, status } = req.body;
+  const usuario_id = req.user?.userId;
+
+  if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
+  try {
+    const actividadExistente = await db.activity.findUnique({
+      where: { id: id as string }
+    });
+
+    if (!actividadExistente) {
+      return res.status(404).json({ message: 'Actividad no encontrada.' });
+    }
+
+    // Actualizamos el estado de la actividad
+    const actividadActualizada = await db.activity.update({
+      where: { id: id as string },
+      data: {
+        status: status ? mapStatusToPrisma(status) : 'DONE',
+      },
+      include: INCLUDE_RELATIONS,
+    });
+
+    // Guardamos la evaluación completa (criterios y comentarios) en los comentarios oficiales de la actividad
+    // (Esto empaqueta todo de forma limpia para que pueda recuperarse después)
+    const evaluacionPayload = JSON.stringify({
+      score,
+      criterios,
+      comentario
+    });
+
+    await db.comment.create({
+      data: {
+        content: `__EVALUACION_JSON__:${evaluacionPayload}`,
+        activityId: id as string,
+        authorId: usuario_id,
+      }
+    });
+
+    return res.status(200).json({ 
+      message: 'Evaluación guardada exitosamente.', 
+      actividad: actividadActualizada 
+    });
+
+  } catch (error) {
+    console.error('Error al guardar evaluación:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
 export default router;
