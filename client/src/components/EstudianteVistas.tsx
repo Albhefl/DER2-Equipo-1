@@ -77,9 +77,6 @@ interface Evidencia {
   creator?: { id: string; name: string };
 }
 
-// ============================================================================
-// FUNCIÓN COMPARTIDA: abrir una evidencia (link externo o archivo local)
-// ============================================================================
 function abrirEvidenciaUrl(url: string) {
   if (url.startsWith('http://') || url.startsWith('https://')) {
     window.open(url, '_blank');
@@ -88,9 +85,6 @@ function abrirEvidenciaUrl(url: string) {
   }
 }
 
-// ============================================================================
-// 1. COMPONENTE ACTIVIDADES PAGE
-// ============================================================================
 export const ActividadesPage: React.FC = () => {
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [usuariosDisponibles, setUsuariosDisponibles] = useState<Miembro[]>([]);
@@ -121,6 +115,19 @@ export const ActividadesPage: React.FC = () => {
   const [mostrandoInputEvidencia, setMostrandoInputEvidencia] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const getUserIdFromToken = () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return '';
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return payload.id || payload.userId || '';
+    } catch {
+      return '';
+    }
+  };
+
+  const currentUserId = getUserIdFromToken();
 
   const fetchActividades = async () => {
     setLoading(true);
@@ -277,7 +284,25 @@ export const ActividadesPage: React.FC = () => {
     }
   };
 
-  // Guarda un ENLACE (URL) como evidencia
+  const handleEliminarComentario = async (comentarioId: string) => {
+    if (!confirm('¿Deseas eliminar este comentario?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_ACTIVIDADES_URL}/comentarios/${comentarioId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        setComentarios(prev => prev.filter(c => c.id !== comentarioId));
+      } else {
+        alert('No se pudo eliminar el comentario.');
+      }
+    } catch (err) {
+      console.error('Error al eliminar comentario:', err);
+    }
+  };
+
   const handleSubirEvidenciaLink = async () => {
     if (!nuevaEvidenciaUrl.trim() || !vistaDetalle) return;
     try {
@@ -297,7 +322,6 @@ export const ActividadesPage: React.FC = () => {
     }
   };
 
-  // Sube un ARCHIVO real (PDF/DOCX/etc.) como evidencia
   const handleSubirArchivoEvidencia = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !vistaDetalle) return;
@@ -461,7 +485,18 @@ export const ActividadesPage: React.FC = () => {
                     <div className="flex-1 bg-gray-50/60 p-3 rounded-xl border border-gray-100 space-y-1">
                       <div className="flex justify-between items-center">
                         <span className="font-bold text-gray-800">{c.author?.name || 'Ana García'}</span>
-                        <span className="text-[10px] text-gray-400">{formatearFecha(c.createdAt)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-gray-400">{formatearFecha(c.createdAt)}</span>
+                          {String(c.author?.id) === String(currentUserId) && (
+                            <button
+                              onClick={() => handleEliminarComentario(c.id)}
+                              className="text-gray-400 hover:text-red-600 transition p-0.5 cursor-pointer"
+                              title="Eliminar comentario"
+                            >
+                              <Trash2 size={12} />
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <p className="text-gray-600 leading-normal">{c.content}</p>
                     </div>
@@ -492,7 +527,6 @@ export const ActividadesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* PANEL EVIDENCIAS EN DETALLE DE ACTIVIDAD */}
           <div className="space-y-6">
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
               <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
@@ -1092,9 +1126,6 @@ export const ActividadesPage: React.FC = () => {
   );
 };
 
-// ============================================================================
-// 2. COMPONENTE ENTREGAS PAGE (Sincronizado)
-// ============================================================================
 type EstadoEntrega = "Pendiente" | "En Revisión" | "Aprobado" | "Completada";
 
 export type Entrega = {
@@ -1154,7 +1185,6 @@ export const EntregasPage: React.FC = () => {
           if (a.status === "APPROVED" || a.status === "Aprobado") st = "Aprobado";
           if (a.status === "DONE" || a.status === "Completado" || a.status === "Completada") st = "Completada";
 
-          // 🟢 CORRECCIÓN CLAVE: Mapear buscando 'evidencias' (de Prisma) o 'evidence'
           const listaEvidencias = a.evidencias || a.evidence || [];
           const evidenciasLimpias = listaEvidencias
             .filter((e: any) => e && (e.url || e.contenido) && !String(e.url || e.contenido).includes('undefined'))
@@ -1180,7 +1210,6 @@ export const EntregasPage: React.FC = () => {
 
         setEntregas(listaMapeada);
 
-        // 🟢 Sincroniza en automático el objeto seleccionado
         if (listaMapeada.length > 0) {
           setSelectedEntrega(prev => {
             if (!prev) return listaMapeada[0];
@@ -1358,7 +1387,6 @@ export const EntregasPage: React.FC = () => {
 
       <div className="flex flex-col lg:flex-row gap-5 items-start w-full">
         
-        {/* LISTA DE ENTREGAS */}
         <div className="flex-1 w-full space-y-3">
           {loading ? (
             <div className="p-8 text-center text-xs text-gray-400 bg-white rounded-2xl border border-gray-100">
@@ -1413,7 +1441,6 @@ export const EntregasPage: React.FC = () => {
           )}
         </div>
 
-        {/* PANEL DETALLE DERECHO */}
         {selectedEntrega && (
           <div className="w-full lg:w-72 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shrink-0 space-y-4 lg:sticky lg:top-6 text-xs">
             <div>
@@ -1439,7 +1466,6 @@ export const EntregasPage: React.FC = () => {
               </div>
             </div>
 
-            {/* SECCIÓN EVIDENCIAS */}
             <div className="border-t border-gray-50 pt-3 space-y-2">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                 Evidencias ({selectedEntrega.evidence?.length || 0})
@@ -1463,15 +1489,15 @@ export const EntregasPage: React.FC = () => {
                         >
                           {ev.url}
                         </button>
-                      </div>
-                      <button 
-                        onClick={() => handleEliminarEvidencia(ev.id)}
-                        className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0"
-                        title="Eliminar evidencia"
-                      >
-                        <Trash2 size={13} />
-                      </button>
                     </div>
+                    <button 
+                      onClick={() => handleEliminarEvidencia(ev.id)}
+                      className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0"
+                      title="Eliminar evidencia"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
                   ))}
                 </div>
               ) : (
@@ -1503,8 +1529,7 @@ export const EntregasPage: React.FC = () => {
 
       </div>
 
-      {/* MODAL ADJUNTAR EVIDENCIA */}
-      {modalOpen && (
+        {modalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl space-y-4 relative">
             <h3 className="text-sm font-bold text-gray-900 uppercase">Adjuntar Evidencia</h3>

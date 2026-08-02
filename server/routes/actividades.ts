@@ -597,6 +597,41 @@ router.post(
 );
 
 /**
+ * DELETE /api/actividades/comentarios/:id
+ * Elimina un comentario por su ID verificando que el usuario esté autenticado
+ */
+router.delete('/comentarios/:id', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const usuario_id = req.user?.userId;
+
+  if (!id) return res.status(400).json({ message: 'ID de comentario requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
+  try {
+    const comentarioExistente = await db.comment.findUnique({
+      where: { id: id as string }
+    });
+
+    if (!comentarioExistente) {
+      return res.status(404).json({ message: 'Comentario no encontrado.' });
+    }
+
+    // Opcional de seguridad: verificar que solo el autor pueda borrarlo
+    if (comentarioExistente.authorId !== usuario_id) {
+      return res.status(403).json({ message: 'No tienes permiso para eliminar este comentario.' });
+    }
+
+    await db.comment.delete({
+      where: { id: id as string }
+    });
+
+    return res.status(200).json({ message: 'Comentario eliminado exitosamente.' });
+  } catch (error) {
+    console.error('Error al eliminar el comentario:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+/**
  * DELETE /api/actividades/evidencias/:evidenciaId
  * Elimina el registro de evidencia y, si es un archivo local, también el archivo físico en disco.
  */
