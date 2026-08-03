@@ -66,26 +66,16 @@ export const EvaluadorFormulario: React.FC = () => {
           setEvidencias(dataEvi.evidencias || []);
         }
 
-        // 3. Cargar comentarios para recuperar evaluación previa si existe
-        const resCom = await fetch(`${API_ACTIVIDADES_URL}/${id}/comentarios`, { headers });
-        if (resCom.ok) {
-          const dataCom = await resCom.json();
-          const comentarios = dataCom.comentarios || [];
-          
-          // Buscamos si hay un comentario con el formato JSON de evaluación guardada
-          const evalComentario = comentarios.find((c: any) => c.content.startsWith('__EVALUACION_JSON__:'));
-          if (evalComentario) {
-            try {
-              const jsonStr = evalComentario.content.replace('__EVALUACION_JSON__:', '');
-              const evaluacionGuardada = JSON.parse(jsonStr);
-              if (evaluacionGuardada.criterios) {
-                setCriterios(evaluacionGuardada.criterios);
-              }
-              if (evaluacionGuardada.comentario !== undefined) {
-                setComentario(evaluacionGuardada.comentario);
-              }
-            } catch (e) {
-              console.error('Error al parsear evaluación previa:', e);
+        // 3. Cargar evaluación previa desde la tabla dedicada Evaluation
+        const resEval = await fetch(`${API_ACTIVIDADES_URL}/${id}/evaluacion`, { headers });
+        if (resEval.ok) {
+          const dataEval = await resEval.json();
+          if (dataEval.evaluacion) {
+            if (dataEval.evaluacion.criteria) {
+              setCriterios(dataEval.evaluacion.criteria);
+            }
+            if (dataEval.evaluacion.comentario !== undefined && dataEval.evaluacion.comentario !== null) {
+              setComentario(dataEval.evaluacion.comentario);
             }
           }
         }
