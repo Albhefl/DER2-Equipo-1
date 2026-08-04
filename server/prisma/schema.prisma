@@ -37,6 +37,7 @@ model User {
   comments           Comment[]
   evidenceUploaded   Evidence[]
   statusChanges      StatusHistory[]
+  evaluationsGiven   Evaluation[] 
 
   // Relaciones con Proyectos
   projectsMember     ProjectMember[]
@@ -100,6 +101,7 @@ model Activity {
   comments      Comment[]
   evidence      Evidence[]
   statusHistory StatusHistory[]
+  evaluation    Evaluation?  
 
   @@map("activities")
 }
@@ -153,4 +155,21 @@ model StatusHistory {
   changer  User     @relation(fields: [changedBy], references: [id])
 
   @@map("status_history")
+}
+
+model Evaluation {
+  id         String   @id @default(uuid())
+  score      Float
+  criteria   Json
+  comentario String?
+  activityId String   @map("activity_id")
+  evaluatorId String  @map("evaluator_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  activity  Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  evaluator User     @relation(fields: [evaluatorId], references: [id])
+
+  @@unique([activityId]) // una evaluación por actividad (o quita esto si permites varias)
+  @@map("evaluations")
 }

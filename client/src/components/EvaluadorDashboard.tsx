@@ -1,30 +1,124 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; 
-import { 
-  Folder, 
-  Bell, 
-  CheckSquare, 
-  Clock 
-} from 'lucide-react';
+import { Folder, Bell, CheckSquare, Clock } from 'lucide-react';
+
+const API_PROYECTOS_URL = 'http://localhost:3000/api/actividades/proyectos';
+const API_ACTIVIDADES_URL = 'http://localhost:3000/api/actividades';
+
+interface ProyectoReal {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  progress: number;
+}
+
+interface ActividadReal {
+  id: string;
+  name: string;
+  status: string;
+  deadline: string;
+  projectId?: string;
+  project?: { id?: string; name: string };
+}
+
+const getInitials = (name?: string) => {
+  if (!name) return 'EV';
+  const cleanName = name.trim();
+  const parts = cleanName.split(/\s+/);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  } else {
+    return parts[0][0].toUpperCase();
+  }
+};
 
 export const EvaluadorDashboard: React.FC = () => {
-  const proyectos = [
-    { id: 1, nombre: 'Funcionalidad de login', equipo: 'Equipo Beta', responsable: 'Carlos Flores', progreso: 75, fecha: 'Viernes 6', estado: 'En proceso', colorEstado: 'bg-blue-50 text-blue-600 border border-blue-100' },
-    { id: 2, nombre: 'Diseño de base de datos', equipo: 'Equipo Sigma', responsable: 'Ana Torres', progreso: 45, fecha: 'Viernes 8', estado: 'Completado', colorEstado: 'bg-green-50 text-green-600 border border-green-100' },
-    { id: 3, nombre: 'Manual de usuario', equipo: 'Proyecto Héroe', responsable: 'Luis Ramírez', progreso: 38, fecha: 'Viernes 12', estado: 'Pendiente', colorEstado: 'bg-gray-50 text-gray-500 border border-gray-100' },
-    { id: 4, nombre: 'Prueba de usabilidad', equipo: 'Equipo Alfa', responsable: 'María Díaz', progreso: 60, fecha: 'Viernes 15', estado: 'En revisión', colorEstado: 'bg-amber-50 text-amber-600 border border-amber-100' },
-    { id: 5, nombre: 'Presentación final', equipo: 'StarK Corp', responsable: 'Pedro Vega', progreso: 20, fecha: 'Viernes 20', estado: 'Pendiente', colorEstado: 'bg-gray-50 text-gray-500 border border-gray-100' },
-  ];
+  const [proyectos, setProyectos] = useState<ProyectoReal[]>([]);
+  const [actividades, setActividades] = useState<ActividadReal[]>([]);
+  const [nombreEvaluador, setNombreEvaluador] = useState('Profesor');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDataReal = async () => {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem('token');
+        const headers = { Authorization: `Bearer ${token}` };
+
+        // 1. Obtener nombre del evaluador desde el localStorage
+        const userStored = localStorage.getItem('user');
+        if (userStored) {
+          const parsed = JSON.parse(userStored);
+          if (parsed.name) setNombreEvaluador(parsed.name);
+        }
+
+        // 2. Petición en paralelo de proyectos y actividades
+        const [resProyectos, resActividades] = await Promise.all([
+          fetch(API_PROYECTOS_URL, { headers }),
+          fetch(API_ACTIVIDADES_URL, { headers })
+        ]);
+
+        let proyectosAsignados: ProyectoReal[] = [];
+        if (resProyectos.ok) {
+          const dataP = await resProyectos.json();
+          proyectosAsignados = dataP.proyectos || [];
+          setProyectos(proyectosAsignados);
+        }
+
+        if (resActividades.ok) {
+          const dataA = await resActividades.json();
+          const todasLasActividades = dataA.actividades || [];
+
+          // 3. Filtrar actividades estrictamente según los proyectos del profesor
+          const idsProyectosDelProfesor = proyectosAsignados.map(p => String(p.id));
+          const actividadesDelProfesor = todasLasActividades.filter((act: any) => {
+            const pId = String(act.projectId || act.project?.id || '');
+            return idsProyectosDelProfesor.includes(pId);
+          });
+
+          setActividades(actividadesDelProfesor);
+        }
+
+      } catch (err) {
+        console.error('Error al cargar datos reales del evaluador:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDataReal();
+  }, []);
+
+  const getBadgeStyle = (status: string) => {
+    switch (status) {
+      case 'Completado':
+      case 'DONE': 
+        return 'bg-green-50 text-green-600 border border-green-100';
+      case 'En Proceso':
+      case 'IN_PROCESS': 
+        return 'bg-blue-50 text-blue-600 border border-blue-100';
+      case 'En Revisión':
+      case 'IN_REVIEW': 
+        return 'bg-amber-50 text-amber-600 border border-amber-100';
+      case 'Pendiente':
+      case 'PENDING':
+      default: 
+        return 'bg-gray-50 text-gray-500 border border-gray-100';
+    }
+  };
+
+  const totalProyectos = proyectos.length;
+  const actividadesEnRevision = actividades.filter(a => a.status === 'IN_REVIEW' || a.status === 'En Revisión').length;
+  const actividadesPendientes = actividades.filter(a => a.status === 'PENDING' || a.status === 'Pendiente').length;
+  const iniciales = getInitials(nombreEvaluador);
 
   return (
-    // 🟢 CONTENEDOR FLUIDO: Ocupa todo el ancho sin empujes duros
     <div className="w-full max-w-full space-y-6 box-border">
-      
-      {/* TOPBAR (Responsivo: Oculta textos largos en móviles si es necesario) */}
       <header className="bg-white border border-gray-100 rounded-2xl flex items-center justify-between p-4 md:p-6 shadow-sm shadow-gray-100/40">
         <div>
           <h2 className="text-base md:text-lg font-bold text-gray-900 leading-none mb-1">Dashboard del Evaluador</h2>
-          <p className="text-xs text-gray-400">Bienvenido, María González</p>
+          <p className="text-xs text-gray-400">Bienvenido, {nombreEvaluador}</p>
         </div>
         <div className="flex items-center gap-4">
           <button className="text-gray-400 p-2 hover:bg-gray-50 rounded-xl transition-colors relative">
@@ -32,29 +126,26 @@ export const EvaluadorDashboard: React.FC = () => {
             <span className="absolute top-2 right-2 w-2 h-2 bg-blue-600 rounded-full"></span>
           </button>
           <div className="flex items-center gap-3 pl-3 border-l border-gray-100">
-            <div className="w-9 h-9 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">MG</div>
+            <div className="w-9 h-9 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">
+              {iniciales}
+            </div>
             <div className="hidden sm:block text-left">
-              <p className="text-sm font-semibold text-gray-900 leading-tight">María González</p>
+              <p className="text-sm font-semibold text-gray-900 leading-tight">{nombreEvaluador}</p>
               <p className="text-xs text-gray-400">Evaluador</p>
             </div>
           </div>
         </div>
       </header>
 
-      {/* ÁREA DE CONTENIDO GRID RESPONSIVO */}
       <div className="flex flex-col lg:flex-row gap-6 w-full max-w-full">
-        
-        {/* COLUMNA IZQUIERDA (Principal) */}
         <div className="flex-1 space-y-6 min-w-0 w-full">
-          
-          {/* INDICADORES (1 columna en móvil, 3 en pantallas md) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-white p-5 rounded-2xl border border-gray-100 flex items-center gap-4 shadow-sm shadow-gray-100/40">
               <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
                 <Folder size={22} />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900 leading-none mb-1">6</p>
+                <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{loading ? '...' : totalProyectos}</p>
                 <p className="text-xs text-gray-400 font-medium">Proyectos asignados</p>
               </div>
             </div>
@@ -63,7 +154,7 @@ export const EvaluadorDashboard: React.FC = () => {
                 <CheckSquare size={22} />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900 leading-none mb-1">12</p>
+                <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{loading ? '...' : actividadesEnRevision}</p>
                 <p className="text-xs text-gray-400 font-medium">Evaluaciones por revisar</p>
               </div>
             </div>
@@ -72,13 +163,12 @@ export const EvaluadorDashboard: React.FC = () => {
                 <Clock size={22} />
               </div>
               <div>
-                <p className="text-2xl font-bold text-gray-900 leading-none mb-1">18</p>
-                <p className="text-xs text-gray-400 font-medium">Actividades por revisar</p>
+                <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{loading ? '...' : actividades.length}</p>
+                <p className="text-xs text-gray-400 font-medium">Actividades totales</p>
               </div>
             </div>
           </div>
 
-          {/* TABLA DE PROYECTOS CONTENIDA */}
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm shadow-gray-100/40 w-full">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center">
               <h3 className="font-bold text-gray-900 text-[15px]">Proyectos asignados</h3>
@@ -91,84 +181,80 @@ export const EvaluadorDashboard: React.FC = () => {
                 <thead>
                   <tr className="bg-gray-50/75 text-gray-400 text-[11px] font-bold uppercase tracking-wider border-b border-gray-100">
                     <th className="px-6 py-3.5">Proyecto</th>
-                    <th className="px-6 py-3.5">Equipo</th>
-                    <th className="px-6 py-3.5">Responsable</th>
+                    <th className="px-6 py-3.5">Descripción</th>
                     <th className="px-6 py-3.5">Progreso</th>
-                    <th className="px-6 py-3.5">Fecha de entrega</th>
                     <th className="px-6 py-3.5">Estado</th>
                     <th className="px-6 py-3.5">Acción</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 text-[13px] text-gray-700">
-                  {proyectos.map((p) => (
-                    <tr key={p.id} className="hover:bg-gray-50/30 transition-colors">
-                      <td className="px-6 py-4 font-semibold text-gray-950 whitespace-nowrap">{p.nombre}</td>
-                      <td className="px-6 py-4 text-gray-500 whitespace-nowrap">{p.equipo}</td>
-                      <td className="px-6 py-4 text-gray-500 whitespace-nowrap">{p.responsable}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center gap-2 w-24">
-                          <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                            <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${p.progreso}%` }}></div>
-                          </div>
-                          <span className="text-[11px] text-gray-400 font-medium">{p.progreso}%</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-gray-500 whitespace-nowrap">{p.fecha}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-tight ${p.colorEstado}`}>
-                          {p.estado}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <Link to="/evaluador-detalle" className="text-blue-600 font-bold hover:text-blue-700 text-[12px]">
-                          Ver detalle →
-                        </Link>
-                      </td>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-gray-400">Cargando proyectos...</td>
                     </tr>
-                  ))}
+                  ) : proyectos.length > 0 ? (
+                    proyectos.map((p) => (
+                      <tr key={p.id} className="hover:bg-gray-50/30 transition-colors">
+                        <td className="px-6 py-4 font-semibold text-gray-950 whitespace-nowrap">{p.name}</td>
+                        <td className="px-6 py-4 text-gray-500 truncate max-w-xs">{p.description || 'Sin descripción'}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2 w-24">
+                            <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                              <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${p.progress}%` }}></div>
+                            </div>
+                            <span className="text-[11px] text-gray-400 font-medium">{p.progress}%</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold tracking-tight ${getBadgeStyle(p.status)}`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <Link to="/evaluador-detalle" className="text-blue-600 font-bold hover:text-blue-700 text-[12px]">
+                            Ver detalle →
+                          </Link>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-gray-400">No hay proyectos asignados actualmente.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         </div>
 
-        {/* COLUMNA DERECHA (Sidebar lateral de actividades, abajo en móvil) */}
         <div className="w-full lg:w-[280px] space-y-4 shrink-0">
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40">
-            <h4 className="font-bold text-gray-900 text-[14px] mb-1">Actividades por revisar</h4>
-            <p className="text-xs text-gray-400 mb-4">4 pendientes</p>
-            
-            <div className="space-y-3">
-              {proyectos.slice(0, 4).map((p) => (
-                <div key={p.id} className="p-3.5 border border-gray-100 rounded-xl flex flex-col gap-2 bg-white hover:border-gray-200 transition-colors">
-                  <p className="text-xs font-bold text-gray-950 truncate">{p.nombre}</p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-[11px] text-gray-400 font-medium">{p.equipo}</span>
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${p.colorEstado}`}>
-                      {p.estado}
-                    </span>
+            <h4 className="font-bold text-gray-900 text-[14px] mb-1">Actividades recientes</h4>
+            <p className="text-xs text-gray-400 mb-4">{actividadesPendientes} pendientes</p>
+            <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+              {loading ? (
+                <p className="text-xs text-gray-400 text-center py-4">Cargando...</p>
+              ) : actividades.length > 0 ? (
+                actividades.slice(0, 4).map((act) => (
+                  <div key={act.id} className="p-3.5 border border-gray-100 rounded-xl flex flex-col gap-2 bg-white hover:border-gray-200 transition-colors">
+                    <p className="text-xs font-bold text-gray-950 truncate">{act.name}</p>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-gray-400 font-medium truncate max-w-[120px]">
+                        {act.project?.name || 'ClassBoard'}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${getBadgeStyle(act.status)}`}>
+                        {act.status}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-5 pt-4 border-t border-gray-100 grid grid-cols-3 text-center gap-1">
-              <div>
-                <p className="text-base font-bold text-gray-950">18</p>
-                <p className="text-[10px] text-gray-400 font-medium">Total</p>
-              </div>
-              <div>
-                <p className="text-base font-bold text-gray-950">4.0</p>
-                <p className="text-[10px] text-gray-400 font-medium">Promedio</p>
-              </div>
-              <div>
-                <p className="text-base font-bold text-red-500">2</p>
-                <p className="text-[10px] text-gray-400 font-medium">Urgentes</p>
-              </div>
+                ))
+              ) : (
+                <p className="text-xs text-gray-400 italic text-center py-2">Sin actividades registradas.</p>
+              )}
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

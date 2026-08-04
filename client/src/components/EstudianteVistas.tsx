@@ -77,6 +77,14 @@ interface Evidencia {
   creator?: { id: string; name: string };
 }
 
+interface EvaluacionData {
+  score: number;
+  criteria: { id: string; nombre: string; score: number }[];
+  comentario: string | null;
+  evaluator?: { id: string; name: string };
+  createdAt?: string;
+}
+
 function abrirEvidenciaUrl(url: string) {
   if (url.startsWith('http://') || url.startsWith('https://')) {
     window.open(url, '_blank');
@@ -111,6 +119,7 @@ export const ActividadesPage: React.FC = () => {
   const [comentarios, setComentarios] = useState<Comentario[]>([]);
   const [nuevoComentario, setNuevoComentario] = useState('');
   const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
+  const [evaluacion, setEvaluacion] = useState<EvaluacionData | null>(null);
   const [nuevaEvidenciaUrl, setNuevaEvidenciaUrl] = useState('');
   const [mostrandoInputEvidencia, setMostrandoInputEvidencia] = useState(false);
 
@@ -199,6 +208,13 @@ export const ActividadesPage: React.FC = () => {
         .then(res => res.json())
         .then(data => setComentarios(data.comentarios || []))
         .catch(err => console.error('Error comentarios:', err));
+
+      fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/evaluacion`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+        .then(res => res.json())
+        .then(data => setEvaluacion(data.evaluacion || null))
+        .catch(err => console.error('Error evaluación:', err));
 
       fetchEvidenciasDeActividad(vistaDetalle.id);
     }
@@ -414,6 +430,9 @@ export const ActividadesPage: React.FC = () => {
     const badgeObj = ESTADO_BADGES[vistaDetalle.status] || ESTADO_BADGES['PENDING'];
     const nombreProyecto = proyectosDisponibles.find(p => p.id === vistaDetalle.projectId)?.name || 'ClassBoard Equipo A';
 
+    // Comentarios limpios filtrando los datos internos de evaluación JSON
+    const comentariosVisibles = comentarios.filter(c => !c.content.startsWith('__EVALUACION_JSON__:'));
+
     return (
       <div className="p-6 space-y-6 w-full font-sans antialiased text-gray-900 box-border">
         <input
@@ -473,11 +492,11 @@ export const ActividadesPage: React.FC = () => {
 
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
               <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                Comentarios ({comentarios.length})
+                Comentarios ({comentariosVisibles.length})
               </h3>
 
               <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
-                {comentarios.map((c) => (
+                {comentariosVisibles.map((c) => (
                   <div key={c.id} className="flex gap-3 text-xs">
                     <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold flex items-center justify-center shrink-0 text-[10px]">
                       {c.author?.name ? c.author.name.slice(0, 2).toUpperCase() : 'AG'}
@@ -503,7 +522,7 @@ export const ActividadesPage: React.FC = () => {
                   </div>
                 ))}
 
-                {comentarios.length === 0 && (
+                {comentariosVisibles.length === 0 && (
                   <p className="text-xs text-gray-400 italic py-2">No hay comentarios aún. Escribe el primero.</p>
                 )}
               </div>
@@ -608,6 +627,36 @@ export const ActividadesPage: React.FC = () => {
                 </button>
               )}
             </div>
+
+            {evaluacion && (
+              <div className="bg-blue-50/60 p-6 rounded-2xl border border-blue-100 shadow-sm space-y-3 text-xs">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider">Evaluación</h3>
+                  <span className="text-blue-700 font-extrabold text-sm">{evaluacion.score} / 10</span>
+                </div>
+
+                <div className="space-y-1.5 pt-2 border-t border-blue-100">
+                  {evaluacion.criteria?.map((crit) => (
+                    <div key={crit.id} className="flex justify-between text-gray-600">
+                      <span>{crit.nombre}</span>
+                      <span className="font-bold">{crit.score}/5</span>
+                    </div>
+                  ))}
+                </div>
+
+                {evaluacion.comentario && (
+                  <p className="text-gray-600 pt-2 border-t border-blue-100 leading-relaxed">
+                    {evaluacion.comentario}
+                  </p>
+                )}
+
+                {evaluacion.evaluator?.name && (
+                  <p className="text-[10px] text-gray-400 pt-1">
+                    Evaluado por {evaluacion.evaluator.name}
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-3 text-xs">
               <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Información</h3>
@@ -1489,15 +1538,15 @@ export const EntregasPage: React.FC = () => {
                         >
                           {ev.url}
                         </button>
+                      </div>
+                      <button 
+                        onClick={() => handleEliminarEvidencia(ev.id)}
+                        className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0"
+                        title="Eliminar evidencia"
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => handleEliminarEvidencia(ev.id)}
-                      className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0"
-                      title="Eliminar evidencia"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
                   ))}
                 </div>
               ) : (

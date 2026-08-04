@@ -9,7 +9,7 @@ const API_ACTIVIDADES_URL = 'http://localhost:3000/api/actividades';
 interface Criterio {
   id: string;
   nombre: string;
-  score: number; // 1 a 5
+  score: number;
 }
 
 interface Evidencia {
@@ -26,7 +26,7 @@ function formatearFecha(f?: string) {
 }
 
 export const EvaluadorFormulario: React.FC = () => {
-  const { id } = useParams<{ id: string }>(); // ID de la Actividad
+  const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const [actividad, setActividad] = useState<any>(null);
@@ -35,7 +35,7 @@ export const EvaluadorFormulario: React.FC = () => {
   const [comentario, setComentario] = useState('');
   const [guardando, setGuardando] = useState(false);
 
-  // Rúbrica por Criterios para la Actividad
+  // Rúbrica por Criterios inicial por defecto
   const [criterios, setCriterios] = useState<Criterio[]>([
     { id: 'funcionalidad', nombre: 'Funcionalidad', score: 4 },
     { id: 'diseno', nombre: 'Diseño e interfaz', score: 4 },
@@ -45,28 +45,39 @@ export const EvaluadorFormulario: React.FC = () => {
   ]);
 
   useEffect(() => {
-    const cargarDatosActividadYEvidencias = async () => {
+    const cargarDatosEvaluacion = async () => {
       if (!id) return;
       setCargando(true);
       try {
         const token = localStorage.getItem('token');
+        const headers = { Authorization: `Bearer ${token}` };
         
         // 1. Cargar detalle de la actividad
-        const resAct = await fetch(`${API_ACTIVIDADES_URL}/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        const resAct = await fetch(`${API_ACTIVIDADES_URL}/${id}`, { headers });
         if (resAct.ok) {
           const dataAct = await resAct.json();
           setActividad(dataAct.actividad);
         }
 
-        // 2. Cargar evidencias de la actividad (HU-028)
-        const resEvi = await fetch(`${API_ACTIVIDADES_URL}/${id}/evidencias`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // 2. Cargar evidencias
+        const resEvi = await fetch(`${API_ACTIVIDADES_URL}/${id}/evidencias`, { headers });
         if (resEvi.ok) {
           const dataEvi = await resEvi.json();
           setEvidencias(dataEvi.evidencias || []);
+        }
+
+        // 3. Cargar evaluación previa desde la tabla dedicada Evaluation
+        const resEval = await fetch(`${API_ACTIVIDADES_URL}/${id}/evaluacion`, { headers });
+        if (resEval.ok) {
+          const dataEval = await resEval.json();
+          if (dataEval.evaluacion) {
+            if (dataEval.evaluacion.criteria) {
+              setCriterios(dataEval.evaluacion.criteria);
+            }
+            if (dataEval.evaluacion.comentario !== undefined && dataEval.evaluacion.comentario !== null) {
+              setComentario(dataEval.evaluacion.comentario);
+            }
+          }
         }
 
       } catch (err) {
@@ -76,24 +87,51 @@ export const EvaluadorFormulario: React.FC = () => {
       }
     };
 
-    cargarDatosActividadYEvidencias();
+    cargarDatosEvaluacion();
   }, [id]);
 
   const seleccionarScore = (criterioId: string, valor: number) => {
     setCriterios(prev => prev.map(c => c.id === criterioId ? { ...c, score: valor } : c));
   };
 
-  // Cálculo de Nota sobre 10 (Suma / 25 * 10)
   const sumaTotal = criterios.reduce((acc, c) => acc + c.score, 0);
   const notaFinal = ((sumaTotal / 25) * 10).toFixed(1);
 
   const handleGuardarEvaluacion = async () => {
+    if (!id) return;
     setGuardando(true);
-    setTimeout(() => {
-      alert(`¡Evaluación de "${actividad?.name}" guardada con éxito (${notaFinal} / 10)!`);
+    try {
+      const token = localStorage.getItem('token');
+      
+      const payload = {
+        score: parseFloat(notaFinal),
+        criterios: criterios,
+        comentario: comentario,
+        status: 'DONE'
+      };
+
+      const res = await fetch(`${API_ACTIVIDADES_URL}/${id}/evaluar`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        alert(`¡Evaluación guardada con éxito (${notaFinal} / 10)!`);
+        navigate('/evaluador-evaluaciones');
+      } else {
+        const errorData = await res.json();
+        alert(`Error al guardar: ${errorData.message || 'Ocurrió un problema en el servidor'}`);
+      }
+    } catch (err) {
+      console.error('Error de red al guardar evaluación:', err);
+      alert('No se pudo conectar con el servidor para guardar la evaluación.');
+    } finally {
       setGuardando(false);
-      navigate('/evaluador-evaluaciones');
-    }, 700);
+    }
   };
 
   if (cargando) {
@@ -108,7 +146,6 @@ export const EvaluadorFormulario: React.FC = () => {
   return (
     <div className="w-full max-w-full space-y-6 box-border">
       
-      {/* BOTÓN VOLVER Y TÍTULO */}
       <div className="space-y-1">
         <Link to="/evaluador-evaluaciones" className="inline-flex items-center gap-1.5 text-blue-600 text-xs font-bold hover:underline mb-1">
           <ArrowLeft size={14} /> Volver a evaluaciones
@@ -116,7 +153,6 @@ export const EvaluadorFormulario: React.FC = () => {
         <h1 className="text-xl font-bold text-gray-900 tracking-tight">Evaluar actividad</h1>
       </div>
 
-      {/* CAJITA SUPERIOR CON METADATOS */}
       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-5 w-full">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
@@ -147,7 +183,6 @@ export const EvaluadorFormulario: React.FC = () => {
         </div>
       </div>
 
-      {/* 🟢 HU-028: BLOQUE DE EVIDENCIAS ADJUNTAS REALES */}
       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-3 w-full">
         <div className="flex items-center gap-2">
           <Paperclip size={15} className="text-blue-600" />
@@ -183,7 +218,6 @@ export const EvaluadorFormulario: React.FC = () => {
         )}
       </div>
 
-      {/* FORMULARIO DE EVALUACIÓN CON RÚBRICA Y TABLA RESPONSIVA */}
       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-6 w-full">
         <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Formulario de evaluación</h3>
 
@@ -223,7 +257,6 @@ export const EvaluadorFormulario: React.FC = () => {
           </div>
         </div>
 
-        {/* CALIFICACIÓN FINAL */}
         <div className="pt-3 flex items-center justify-between border-t border-gray-100">
           <span className="text-xs font-bold text-gray-700">Calificación final</span>
           <div className="text-base font-bold text-gray-900">
@@ -232,7 +265,6 @@ export const EvaluadorFormulario: React.FC = () => {
         </div>
       </div>
 
-      {/* COMENTARIOS DEL EVALUADOR */}
       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-3 w-full">
         <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Comentarios del evaluador</h3>
         <textarea
@@ -248,7 +280,6 @@ export const EvaluadorFormulario: React.FC = () => {
         </div>
       </div>
 
-      {/* BOTONES DE ACCIÓN */}
       <div className="flex justify-end gap-3 pt-2">
         <button
           type="button"

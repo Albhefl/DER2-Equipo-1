@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Search, FolderOpen, AlertCircle } from 'lucide-react';
 
 const API_ACTIVIDADES_URL = 'http://localhost:3000/api/actividades';
+const API_PROYECTOS_URL = 'http://localhost:3000/api/actividades/proyectos';
 
 interface Miembro {
   id: string;
@@ -19,6 +20,7 @@ interface ActividadEvaluacion {
   name: string;
   deadline: string;
   status: string;
+  projectId?: string;
   project?: ProyectoSimple | null;
   assignees: { user: Miembro }[];
 }
@@ -53,44 +55,78 @@ function formatearFecha(f?: string) {
   return d.toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+const getInitials = (name?: string) => {
+  if (!name) return 'EV';
+  const cleanName = name.trim();
+  const parts = cleanName.split(/\s+/);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  } else {
+    return parts[0][0].toUpperCase();
+  }
+};
+
 export const EvaluadorEvaluaciones: React.FC = () => {
   const [actividades, setActividades] = useState<ActividadEvaluacion[]>([]);
   const [cargando, setCargando] = useState(true);
   const [busqueda, setBusqueda] = useState('');
   const [filtroProyecto, setFiltroProyecto] = useState('Todos');
   const [filtroEstado, setFiltroEstado] = useState('Todos');
-  const [nombreEvaluador, setNombreEvaluador] = useState('Profesor01');
+  const [nombreEvaluador, setNombreEvaluador] = useState('Profesor');
 
   useEffect(() => {
-    const cargarActividades = async () => {
+    const cargarDatosEvaluador = async () => {
       setCargando(true);
       try {
         const token = localStorage.getItem('token');
+        const headers = { Authorization: `Bearer ${token}` };
+
+        // 1. Obtener nombre del evaluador desde el localStorage
         const userStored = localStorage.getItem('user');
         if (userStored) {
           const parsed = JSON.parse(userStored);
           if (parsed.name) setNombreEvaluador(parsed.name);
         }
 
-        const res = await fetch(API_ACTIVIDADES_URL, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
+        // 2. Consultar en paralelo los proyectos asignados al profesor y todas las actividades
+        const [resProyectos, resActividades] = await Promise.all([
+          fetch(API_PROYECTOS_URL, { headers }),
+          fetch(API_ACTIVIDADES_URL, { headers })
+        ]);
 
-        if (res.ok) {
-          const data = await res.json();
-          setActividades(data.actividades || []);
+        let idsProyectosDelProfesor: string[] = [];
+
+        if (resProyectos.ok) {
+          const dataP = await resProyectos.json();
+          const proyectosAsignados = dataP.proyectos || [];
+          // Guardamos los IDs de los proyectos que SÍ le pertenecen a este profesor
+          idsProyectosDelProfesor = proyectosAsignados.map((p: any) => String(p.id));
+        }
+
+        if (resActividades.ok) {
+          const dataA = await resActividades.json();
+          const todasLasActividades = dataA.actividades || [];
+
+          // 3. FILTRAR ACTIVIDADES: 
+          // Solo dejamos las actividades cuyo proyecto pertenezca a la lista de proyectos del profesor
+          const actividadesDelProfesor = todasLasActividades.filter((act: any) => {
+            const pId = String(act.projectId || act.project?.id || '');
+            return idsProyectosDelProfesor.includes(pId);
+          });
+
+          setActividades(actividadesDelProfesor);
         }
       } catch (err) {
-        console.error('Error al cargar actividades para evaluación:', err);
+        console.error('Error al cargar actividades filtradas:', err);
       } finally {
         setCargando(false);
       }
     };
 
-    cargarActividades();
+    cargarDatosEvaluador();
   }, []);
 
-  // Proyectos únicos para el selector de filtros
+  // Proyectos únicos para el selector de filtros basados estrictamente en las actividades del profesor
   const proyectosUnicos = Array.from(
     new Set(actividades.map(a => a.project?.name).filter(Boolean))
   ) as string[];
@@ -106,12 +142,10 @@ export const EvaluadorEvaluaciones: React.FC = () => {
     return coincideBusqueda && coincideProyecto && coincideEstado;
   });
 
-  const iniciales = nombreEvaluador.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+  const iniciales = getInitials(nombreEvaluador);
 
   return (
     <div className="w-full max-w-full space-y-6 box-border">
-      
-      {/* HEADER */}
       <header className="bg-white border border-gray-100 rounded-2xl flex items-center justify-between p-4 md:p-6 shadow-sm shadow-gray-100/40">
         <div>
           <h2 className="text-base md:text-lg font-bold text-gray-900 leading-none mb-1">Evaluación de Actividades</h2>
@@ -128,18 +162,14 @@ export const EvaluadorEvaluaciones: React.FC = () => {
         </div>
       </header>
 
-      {/* BANNER INFORMATIVO */}
       <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4 flex items-start gap-3">
         <AlertCircle size={18} className="text-blue-500 mt-0.5 shrink-0" />
         <p className="text-xs text-blue-700 font-medium leading-relaxed">
-          Aquí puedes evaluar individualmente cada actividad desarrollada por los estudiantes en sus proyectos asignados.
+          Aquí puedes evaluar individualmente cada actividad desarrollada por los estudiantes en tus proyectos asignados.
         </p>
       </div>
 
-      {/* TABLA DE ACTIVIDADES */}
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm shadow-gray-100/40 w-full">
-        
-        {/* BARRA DE FILTROS SUPERIOR */}
         <div className="p-5 border-b border-gray-100 flex flex-col md:flex-row justify-between items-stretch md:items-center gap-4">
           <div className="flex flex-wrap items-center gap-2">
             <select
@@ -178,7 +208,6 @@ export const EvaluadorEvaluaciones: React.FC = () => {
           </div>
         </div>
 
-        {/* TABLA DE ACTIVIDADES / ENTREGABLES REALES */}
         <div className="overflow-x-auto w-full">
           {cargando ? (
             <div className="text-center py-12 text-xs text-gray-400 font-medium">
@@ -199,7 +228,7 @@ export const EvaluadorEvaluaciones: React.FC = () => {
               <tbody className="divide-y divide-gray-100 text-[13px] text-gray-700">
                 {actividadesFiltradas.length > 0 ? (
                   actividadesFiltradas.map((act) => {
-                    const proyectoNombre = act.project?.name || 'App de ventas';
+                    const proyectoNombre = act.project?.name || 'Proyecto';
                     const responsables = act.assignees?.map(r => r.user.name).join(', ') || 'Sin asignar';
                     const esCompletado = act.status === 'DONE' || act.status === 'Completado';
 
@@ -239,7 +268,7 @@ export const EvaluadorEvaluaciones: React.FC = () => {
                   <tr>
                     <td colSpan={6} className="text-center py-12 text-xs text-gray-400 font-medium space-y-2">
                       <FolderOpen size={28} className="mx-auto text-gray-300 mb-1" />
-                      <p>No se encontraron actividades registradas.</p>
+                      <p>No tienes actividades para evaluar actualmente.</p>
                     </td>
                   </tr>
                 )}
@@ -253,7 +282,6 @@ export const EvaluadorEvaluaciones: React.FC = () => {
             Mostrando {actividadesFiltradas.length} de {actividades.length} actividades
           </p>
         </div>
-
       </div>
     </div>
   );

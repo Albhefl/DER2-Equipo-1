@@ -4,3 +4,6 @@ client/node_modules/
 .env
 server/.env
 client/.env
+
+server/uploads/*
+!server/uploads/.gitkeep
