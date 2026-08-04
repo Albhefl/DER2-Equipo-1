@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, Info, FolderOpen } from 'lucide-react';
+import { API_BASE_URL } from '../config/apis';
+
 
 interface Evaluador {
   id: string;
@@ -59,7 +61,7 @@ export const EvaluadorProyectos: React.FC = () => {
           if (parsed.name) setNombreUsuario(parsed.name);
         }
 
-        const res = await fetch('http://localhost:3000/api/actividades/proyectos', {
+        const res = await fetch(`${API_BASE_URL}/actividades/proyectos`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 

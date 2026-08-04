@@ -4,8 +4,10 @@ import {
   Upload, ListChecks, CheckCircle2, Package, FolderOpen, Edit2
 } from 'lucide-react';
 
-const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
-const API_PROYECTOS_URL = "http://localhost:3000/api/proyectos";
+import { API_BASE_URL } from '../config/apis';   // ← agregar esta línea
+
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;   // ← cambiar esta línea
+const API_PROYECTOS_URL = `${API_BASE_URL}/proyectos`;  
 
 type ProfileData = {
   id?: string;

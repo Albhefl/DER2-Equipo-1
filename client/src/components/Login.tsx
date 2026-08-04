@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useNavigate } from 'react-router-dom';
-
+import { API_BASE_URL } from '../config/apis'; 
 /**
  * 1. ESQUEMA DE VALIDACIÓN CON ZOD (HU-009.1)
  */
@@ -44,7 +44,7 @@ export const Login: React.FC = () => {
     setBackendError(null); // Limpiamos errores previos
 
     try {
-      const response = await fetch('http://localhost:3000/api/auth/login', {
+     const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

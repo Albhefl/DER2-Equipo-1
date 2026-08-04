@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock } from 'lucide-react';
+import { API_BASE_URL } from '../config/apis';
 
-const API_PROYECTOS_URL = 'http://localhost:3000/api/actividades/proyectos';
-const API_ACTIVIDADES_URL = 'http://localhost:3000/api/actividades';
-
+const API_PROYECTOS_URL = `${API_BASE_URL}/actividades/proyectos`;
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 interface UsuarioPerfil {
   name: string;
   email: string;

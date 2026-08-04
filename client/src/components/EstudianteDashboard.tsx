@@ -10,8 +10,10 @@ import {
 import { ProgressBar } from './ProgressBar';
 import { GraficoActividadesResponsables } from './GraficoActividadesResponsables';
 
-const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
-const API_USUARIOS_URL = "http://localhost:3000/api/usuarios";
+import { API_BASE_URL } from '../config/apis';
+
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
+const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;
 
 type EstadoActividad = "PENDING" | "IN_PROCESS" | "IN_REVIEW" | "DONE";
 

@@ -3,8 +3,10 @@ import {
   Package, Clock, Eye, CheckCircle2, Search, FileText, Upload, Trash2, Paperclip, Link as LinkIcon 
 } from 'lucide-react';
 
-const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
-const SERVER_URL = "http://localhost:3000";
+import { API_BASE_URL, SERVER_URL } from './config/apis';   // ← ojo: "./" no "../" porque este archivo vive en src/, no en src/components/
+
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
+// Elimina la línea "const SERVER_URL = ..." — ya viene del import
 
 type EstadoEntrega = "Pendiente" | "En Revisión" | "Aprobado" | "Completada";
 

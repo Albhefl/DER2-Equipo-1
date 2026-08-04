@@ -4,9 +4,11 @@ import {
   Eye, CheckSquare, ArrowLeft, Send, Link as LinkIcon, FileText, Paperclip, Folder, Circle, Package, Upload, Trash2
 } from 'lucide-react';
 
-const API_ACTIVIDADES_URL = 'http://localhost:3000/api/actividades';
-const API_USUARIOS_URL = 'http://localhost:3000/api/usuarios';
-const SERVER_URL = 'http://localhost:3000';
+import { API_BASE_URL, SERVER_URL } from '../config/apis';
+
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
+const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;
+
 
 type EstadoActividad = 'PENDING' | 'IN_PROCESS' | 'IN_REVIEW' | 'DONE';
 type PrioridadActividad = 'HIGH' | 'MED' | 'LOW';
@@ -160,8 +162,8 @@ export const ActividadesPage: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       const [resU, resP] = await Promise.all([
-        fetch(API_USUARIOS_URL, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch('http://localhost:3000/api/actividades/proyectos', { headers: { Authorization: `Bearer ${token}` } })
+      fetch(API_USUARIOS_URL, { headers: { Authorization: `Bearer ${token}` } }),
+      fetch(`${API_BASE_URL}/actividades/proyectos`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
       if (resU.ok) {
