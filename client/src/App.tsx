@@ -19,8 +19,13 @@ import { LayoutEstudiante } from './components/LayoutEstudiante';
 import { EstudianteDashboard } from './components/EstudianteDashboard'; 
 import { EstudianteKanban } from './components/EstudianteKanban'; 
 import { 
-  ProyectosPage, ActividadesPage, EntregasPage, CalendarioPage, PerfilPage 
+  ActividadesPage, EntregasPage 
 } from './components/EstudianteVistas';
+
+// 🟢 Nuevos componentes modulares del estudiante
+import { EstudianteProyectos } from './components/EstudianteProyectos';
+import { CalendarioFuncional } from './components/CalendarioFuncional';
+import { EstudiantePerfil } from './components/EstudiantePerfil';
 
 function App() {
   return (
@@ -41,7 +46,8 @@ function App() {
           <Route path="/evaluador-proyectos" element={<EvaluadorProyectos />} />
           <Route path="/evaluador-detalle" element={<EvaluadorDetalleProyecto />} />
           <Route path="/evaluador-evaluaciones" element={<EvaluadorEvaluaciones />} />
-          <Route path="/evaluador-formulario" element={<EvaluadorFormulario />} />
+          {/* HU-028: recibe el id real de la actividad a evaluar */}
+          <Route path="/evaluador-formulario/:id" element={<EvaluadorFormulario />} />
           <Route path="/evaluador-perfil" element={<EvaluadorPerfil />} />
           <Route path="/evaluador-perfil/editar" element={<EditarPerfilEvaluador />} />
         </Route>
@@ -55,12 +61,15 @@ function App() {
           }
         >
           <Route path="/estudiante-dashboard" element={<EstudianteDashboard />} />
-          <Route path="/estudiante-proyectos" element={<ProyectosPage />} />
+          <Route path="/estudiante-proyectos" element={<EstudianteProyectos />} />
           <Route path="/estudiante-actividades" element={<ActividadesPage />} />
           <Route path="/estudiante-entregas" element={<EntregasPage />} />
-          <Route path="/estudiante-calendario" element={<CalendarioPage />} />
+          
+          {/* 🟢 RUTAS FUNCIONALES NUEVAS */}
+          <Route path="/estudiante-calendario" element={<CalendarioFuncional />} />
+          <Route path="/estudiante-perfil" element={<EstudiantePerfil />} />
+          
           <Route path="/estudiante-kanban" element={<EstudianteKanban />} />
-          <Route path="/estudiante-perfil" element={<PerfilPage />} />
         </Route>
 
         {/* Redirección por defecto */}
