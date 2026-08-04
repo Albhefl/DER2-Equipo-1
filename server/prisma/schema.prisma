@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  STUDENT
+  EVALUATOR
+}
+
+enum Priority {
+  HIGH
+  MED
+  LOW
+}
+
+enum Status {
+  PENDING
+  IN_PROCESS
+  IN_REVIEW
+  DONE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         Role
+  name         String
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  assignedActivities ActivityAssignee[]
+  comments           Comment[]
+  evidenceUploaded   Evidence[]
+  statusChanges      StatusHistory[]
+  evaluationsGiven   Evaluation[] 
+
+  // Relaciones con Proyectos
+  projectsMember     ProjectMember[]
+  projectsEvaluating ProjectEvaluator[]
+
+  @@map("users")
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  startDate   DateTime? @map("start_date")
+  endDate     DateTime? @map("end_date")
+  status      Status    @default(PENDING)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  members    ProjectMember[]
+  evaluators ProjectEvaluator[]
+  activities Activity[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  projectId String @map("project_id")
+  userId    String @map("user_id")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_members")
+}
+
+model ProjectEvaluator {
+  projectId String @map("project_id")
+  userId    String @map("user_id")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, userId])
+  @@map("project_evaluators")
+}
+
+model Activity {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  deadline    DateTime?
+  priority    Priority  @default(MED)
+  status      Status    @default(PENDING)
+  projectId   String?   @map("project_id")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  project       Project?           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignees     ActivityAssignee[]
+  comments      Comment[]
+  evidence      Evidence[]
+  statusHistory StatusHistory[]
+  evaluation    Evaluation?  
+
+  @@map("activities")
+}
+
+model ActivityAssignee {
+  activityId String @map("activity_id")
+  userId     String @map("user_id")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([activityId, userId])
+  @@map("activity_assignees")
+}
+
+model Comment {
+  id         String   @id @default(uuid())
+  content    String
+  activityId String   @map("activity_id")
+  authorId   String   @map("author_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  author   User     @relation(fields: [authorId], references: [id])
+
+  @@map("comments")
+}
+
+model Evidence {
+  id         String   @id @default(uuid())
+  url        String
+  activityId String   @map("activity_id")
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  creator  User     @relation(fields: [createdBy], references: [id])
+
+  @@map("evidence")
+}
+
+model StatusHistory {
+  id         String   @id @default(uuid())
+  activityId String   @map("activity_id")
+  fromStatus Status?  @map("from_status")
+  toStatus   Status   @map("to_status")
+  changedBy  String   @map("changed_by")
+  changedAt  DateTime @default(now()) @map("changed_at")
+
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  changer  User     @relation(fields: [changedBy], references: [id])
+
+  @@map("status_history")
+}
+
+model Evaluation {
+  id         String   @id @default(uuid())
+  score      Float
+  criteria   Json
+  comentario String?
+  activityId String   @map("activity_id")
+  evaluatorId String  @map("evaluator_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  activity  Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  evaluator User     @relation(fields: [evaluatorId], references: [id])
+
+  @@unique([activityId]) // una evaluación por actividad (o quita esto si permites varias)
+  @@map("evaluations")
+}

@@ -7,40 +7,38 @@ interface ProtectedRouteProps {
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, rolPermitido }) => {
-  // 🟢 Cambia la simulación anterior por la lectura de tu JSON real:
+  const token = localStorage.getItem('token');
   const userStorage = localStorage.getItem('user');
-  let usuarioRol = 'estudiante'; // Rol por defecto si no hay nada
 
-  if (userStorage) {
-    try {
-      const parsedUser = JSON.parse(userStorage);
-      usuarioRol = parsedUser.role; // Extrae "admin", "estudiante" o lo que contenga
-    } catch (e) {
-      console.error("Error al parsear el usuario de localStorage", e);
-    }
-  }
-
-  const isAuthenticated = true;
-
-  if (!isAuthenticated) {
+  // Si no hay token o no hay usuario guardado, redirigir al login
+  if (!token || !userStorage) {
     return <Navigate to="/login" replace />;
   }
 
-  // 🚫 EL CANDADO DE CONTROL DE ACCESO (HU-011.2)
-  // Si eres un estudiante (o admin en tus pruebas) e intentas burlar la ruta
-  if (usuarioRol !== rolPermitido) {
-    if (rolPermitido === 'evaluador') {
-      alert('🚫 Acceso no autorizado: No tienes permisos de Evaluador para acceder a esta ruta.');
-      return <Navigate to="/estudiante-dashboard" replace />;
-    }
-    
-    if (rolPermitido === 'estudiante') {
-      return <Navigate to="/evaluador-dashboard" replace />;
-    }
+  let usuarioRolRaw = '';
+
+  try {
+    const parsedUser = JSON.parse(userStorage);
+    usuarioRolRaw = String(parsedUser.role || parsedUser.rol || '').toUpperCase().trim();
+  } catch (e) {
+    console.error("Error al parsear el usuario de localStorage", e);
+    return <Navigate to="/login" replace />;
   }
 
+  // Mapear el rol del backend a las banderas de frontend
+  const esEvaluador = usuarioRolRaw === 'EVALUATOR' || usuarioRolRaw === 'EVALUADOR';
+  const esEstudiante = usuarioRolRaw === 'STUDENT' || usuarioRolRaw === 'ESTUDIANTE';
 
+  // 🚫 CONTROL DE ACCESO SEGÚN RUTA
+  if (rolPermitido === 'evaluador' && !esEvaluador) {
+    alert('🚫 Acceso no autorizado: No tienes permisos de Evaluador para acceder a esta ruta.');
+    return <Navigate to="/estudiante-dashboard" replace />;
+  }
 
-  // Si todo está bien, lo deja pasar al componente original
+  if (rolPermitido === 'estudiante' && !esEstudiante) {
+    return <Navigate to="/evaluador-evaluaciones" replace />;
+  }
+
+  // Si pasa las validaciones, renderiza la vista solicitada
   return children;
 };
