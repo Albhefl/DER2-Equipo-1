@@ -4,6 +4,7 @@ import {
   Plus, Search, FolderOpen, Edit2, ArrowLeft,
   CheckCircle2, AlertCircle, Eye, CheckSquare 
 } from 'lucide-react';
+import { API_BASE_URL } from '../config/apis';
 
 function Badge({ label }: { label: string }) {
   let cls = 'bg-gray-100 text-gray-700';
@@ -94,7 +95,7 @@ export const EstudianteProyectos: React.FC = () => {
     setCargandoProyectos(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:3000/api/actividades/proyectos', {
+      const res = await fetch(`${API_BASE_URL}/actividades/proyectos`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
@@ -115,8 +116,8 @@ export const EstudianteProyectos: React.FC = () => {
       try {
         const token = localStorage.getItem('token');
         const [resE, resA] = await Promise.all([
-          fetch('http://localhost:3000/api/usuarios/evaluadores', { headers: { Authorization: `Bearer ${token}` } }),
-          fetch('http://localhost:3000/api/usuarios', { headers: { Authorization: `Bearer ${token}` } })
+        fetch(`${API_BASE_URL}/usuarios/evaluadores`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/usuarios`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
         
         if (resE.ok) {
@@ -177,7 +178,7 @@ export const EstudianteProyectos: React.FC = () => {
     e.preventDefault();
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch('http://localhost:3000/api/actividades/proyectos', {
+      const res = await fetch(`${API_BASE_URL}/actividades/proyectos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify(formProyecto)

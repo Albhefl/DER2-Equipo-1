@@ -7,6 +7,7 @@ import {
   Circle,
   FolderOpen
 } from 'lucide-react';
+import { API_BASE_URL } from '../config/apis';
 
 interface Miembro {
   id: string;
@@ -95,7 +96,7 @@ export const EvaluadorDetalleProyecto: React.FC = () => {
         }
 
         // 1. Obtener la lista de proyectos asignados
-        const resProyectos = await fetch('http://localhost:3000/api/actividades/proyectos', {
+        const resProyectos = await fetch(`${API_BASE_URL}/actividades/proyectos`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 
@@ -108,7 +109,7 @@ export const EvaluadorDetalleProyecto: React.FC = () => {
         }
 
         // 2. Obtener actividades pertenecientes a este proyecto
-        const resActividades = await fetch('http://localhost:3000/api/actividades', {
+        const resActividades = await fetch(`${API_BASE_URL}/actividades`, {
           headers: { Authorization: `Bearer ${token}` }
         });
 

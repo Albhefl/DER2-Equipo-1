@@ -1,5 +1,5 @@
 import { Router, type Request, type Response } from 'express';
-import jwt from 'jsonwebtoken';
+import jwt, { type SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import db from '../src/db.js'; // Cliente de Prisma (Postgres)
@@ -101,10 +101,13 @@ router.post('/login', loginLimiter, async (req: Request, res: Response): Promise
     }
 
     // Generar el Token JWT
+    const expiresIn: SignOptions['expiresIn'] =
+      (process.env.JWT_EXPIRES_IN as SignOptions['expiresIn']) ?? '2h';
+
     const token = jwt.sign(
       { userId: user.id, role: user.role },
       JWT_SECRET,
-      { expiresIn: '2h' }
+      { expiresIn }
     );
 
     return res.status(200).json({

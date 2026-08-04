@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter } from 'lucide-react';
-import { ProgressBar } from './ProgressBar'; // 🟢 HU-030: Componente de la Barra de Progreso
+import { ProgressBar } from './ProgressBar';
+import { API_BASE_URL } from '../config/apis';   // ← agregar esta línea
 
-const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
-const API_USUARIOS_URL = "http://localhost:3000/api/usuarios";
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;   // ← cambiar esta línea
+const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;         // ← cambiar esta línea
 
 type EstadoActividad = "PENDING" | "IN_PROCESS" | "IN_REVIEW" | "DONE";
 type PrioridadActividad = "HIGH" | "MED" | "LOW";

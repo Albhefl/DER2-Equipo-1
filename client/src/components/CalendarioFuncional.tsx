@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
+import { API_BASE_URL } from '../config/apis';
 
-const API_ACTIVIDADES_URL = "http://localhost:3000/api/actividades";
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 
 export type EventoCalendario = {
   id: string;

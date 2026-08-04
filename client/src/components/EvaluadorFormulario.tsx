@@ -4,7 +4,9 @@ import {
   ArrowLeft, ShieldCheck, CheckCircle2, FileText, ExternalLink, Paperclip 
 } from 'lucide-react';
 
-const API_ACTIVIDADES_URL = 'http://localhost:3000/api/actividades';
+import { API_BASE_URL, SERVER_URL } from '../config/apis';
+
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 
 interface Criterio {
   id: string;
@@ -196,7 +198,7 @@ export const EvaluadorFormulario: React.FC = () => {
             {evidencias.map((ev) => (
               <a
                 key={ev.id}
-                href={ev.url.startsWith('http') ? ev.url : `http://localhost:3000/uploads/${ev.url}`}
+                href={ev.url.startsWith('http') ? ev.url : `${SERVER_URL}/uploads/${ev.url}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-between p-3 bg-gray-50 hover:bg-blue-50/60 border border-gray-100 hover:border-blue-200 rounded-xl transition group text-xs"

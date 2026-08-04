@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Search, FolderOpen, AlertCircle } from 'lucide-react';
 
-const API_ACTIVIDADES_URL = 'http://localhost:3000/api/actividades';
-const API_PROYECTOS_URL = 'http://localhost:3000/api/actividades/proyectos';
+import { API_BASE_URL } from '../config/apis';
+
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
+const API_PROYECTOS_URL = `${API_BASE_URL}/actividades/proyectos`;
 
 interface Miembro {
   id: string;
