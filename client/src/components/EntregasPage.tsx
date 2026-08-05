@@ -300,6 +300,11 @@ export const EntregasPage: React.FC = () => {
                       <p className="text-[10px] text-gray-400 font-semibold mt-1">
                         Fecha límite: {e.dueDate} &nbsp;·&nbsp; Formato: {e.format}
                       </p>
+                      <div className="mt-1">
+                        <span className="inline-flex items-center px-2 py-0.5 bg-white border border-gray-200 shadow-sm text-gray-800 rounded-lg text-[11px] font-bold">
+                          ClassBoard Equipo A
+                        </span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
