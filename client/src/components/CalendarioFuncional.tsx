@@ -106,7 +106,7 @@ export const CalendarioFuncional: React.FC = () => {
     actividad: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
   };
 
-  const handleEventClick = (ev: EventoCalendario) => {
+  const handleEventClick = (_ev: EventoCalendario) => {
     // Al dar clic en un evento, redirige a la vista de proyectos
     navigate('/estudiante-proyectos');
   };
