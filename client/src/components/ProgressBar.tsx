@@ -18,12 +18,13 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
       : 0;
 
   return (
-    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-2.5 w-full">
+    <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-xs space-y-2.5 w-full">
       <div className="flex justify-between items-center text-xs">
         <span className="font-bold text-gray-800 uppercase tracking-wider">
           {titulo}
         </span>
-        <span className="font-extrabold text-blue-600 text-sm">
+        {/* 🟢 Cambiado a text-gray-900 para que sea negro minimalista */}
+        <span className="font-bold text-gray-900 text-sm">
           {porcentaje}%
         </span>
       </div>
@@ -31,7 +32,8 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
       {/* Barra visual de progreso */}
       <div className="w-full bg-gray-100 h-2.5 rounded-full overflow-hidden">
         <div
-          className="bg-blue-600 h-full rounded-full transition-all duration-500 ease-out"
+          /* 🟢 Cambiado a bg-black para que la barra de progreso sea negra como en Figma */
+          className="bg-black h-full rounded-full transition-all duration-500 ease-out"
           style={{ width: `${porcentaje}%` }}
         />
       </div>
