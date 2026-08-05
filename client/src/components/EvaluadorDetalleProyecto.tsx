@@ -295,18 +295,24 @@ export const EvaluadorDetalleProyecto: React.FC = () => {
           </div>
 
           {/* BOTÓN RÁPIDO A EVALUACIONES */}
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-3">
-            <h4 className="font-bold text-gray-900 text-[14px]">Acción de Evaluación</h4>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Como evaluador asignado, puedes revisar y calificar individualmente las actividades de este proyecto.
-            </p>
-            <Link 
-              to="/evaluador-evaluaciones" 
-              className="w-full block py-2.5 text-center bg-black text-white font-bold rounded-xl text-xs hover:bg-gray-900 transition shadow-sm"
-            >
-              Ir a Evaluaciones
-            </Link>
-          </div>
+              <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-3">
+                <h4 className="font-bold text-gray-900 text-[14px]">Acción de Evaluación</h4>
+                <p className="text-xs text-gray-500 leading-relaxed">
+                  Como evaluador asignado, puedes revisar y calificar individualmente las actividades de este proyecto.
+                </p>
+                <Link 
+                  to={`/evaluador-kanban?projectId=${proyecto.id}`}
+                  className="w-full block py-2.5 text-center bg-white text-gray-900 border border-gray-200 font-bold rounded-xl text-xs hover:bg-gray-50 transition shadow-sm"
+                >
+                  Ver tablero Kanban
+                </Link>
+                <Link 
+                  to="/evaluador-evaluaciones" 
+                  className="w-full block py-2.5 text-center bg-black text-white font-bold rounded-xl text-xs hover:bg-gray-900 transition shadow-sm"
+                >
+                  Ir a Evaluaciones
+                </Link>
+              </div>
 
         </div>
 

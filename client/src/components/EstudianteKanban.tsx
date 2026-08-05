@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter, FolderOpen } from 'lucide-react';
 import { ProgressBar } from './ProgressBar';
-import { API_BASE_URL } from '../config/apis';   // ← agregar esta línea
+import { API_BASE_URL } from '../config/apis';
 
-const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;   // ← cambiar esta línea
-const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;         // ← cambiar esta línea
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
+const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;
+const API_PROYECTOS_URL = `${API_BASE_URL}/actividades/proyectos`;
 
 type EstadoActividad = "PENDING" | "IN_PROCESS" | "IN_REVIEW" | "DONE";
 type PrioridadActividad = "HIGH" | "MED" | "LOW";
@@ -23,6 +24,7 @@ const PRIORIDAD_LABELS: Record<PrioridadActividad, string> = { HIGH: "Alta", MED
 
 type Miembro = { id: string; name: string; email: string };
 type Responsable = { user: Miembro };
+type ProyectoSimple = { id: string; name: string };
 
 type Actividad = {
   id: string;
@@ -32,6 +34,7 @@ type Actividad = {
   status: EstadoActividad;
   priority?: PrioridadActividad;
   projectId?: string | null;
+  project?: ProyectoSimple | null;
   assignees: Responsable[];
 };
 
@@ -101,12 +104,15 @@ function mergeMiembros(previos: Miembro[], nuevos: Miembro[]): Miembro[] {
 
 export const EstudianteKanban: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const projectIdParam = searchParams.get("projectId");
 
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  const [proyectos, setProyectos] = useState<ProyectoSimple[]>([]);
 
   const [filtroResponsable, setFiltroResponsable] = useState("");
   const [filtroPrioridad, setFiltroPrioridad] = useState("");
@@ -153,6 +159,21 @@ export const EstudianteKanban: React.FC = () => {
       }
     };
     fetchMiembros();
+  }, []);
+
+  // 🟢 Cargar proyectos del estudiante para el filtro del Kanban
+  useEffect(() => {
+    const fetchProyectos = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(API_PROYECTOS_URL, { headers: { Authorization: `Bearer ${token}` } });
+        const data = await response.json();
+        if (response.ok) setProyectos(data.proyectos || []);
+      } catch (err) {
+        console.error("Error al cargar proyectos:", err);
+      }
+    };
+    fetchProyectos();
   }, []);
 
   const responsablesDisponibles = mergeMiembros([], actividades.flatMap(a => a.assignees.map(r => r.user)));
@@ -291,10 +312,17 @@ export const EstudianteKanban: React.FC = () => {
     ? miembrosEquipo.filter(m => !editModal.assignees.some(r => r.user.id === m.id))
     : [];
 
-  // 🟢 HU-030: Cálculo dinámico de actividades del proyecto
   const actividadesVisibles = actividades.filter(a => !projectIdParam || a.projectId === projectIdParam);
   const totalActividadesProyecto = actividadesVisibles.length;
   const completadasActividadesProyecto = actividadesVisibles.filter(a => a.status === 'DONE').length;
+
+  // 🟢 Nombre del proyecto activo (para mostrarlo en el subtítulo cuando hay filtro)
+  const proyectoActivo = proyectos.find(p => p.id === projectIdParam);
+
+  // 🟢 Cambia el filtro de proyecto actualizando la URL
+  const handleFiltroProyectoChange = (val: string) => {
+    navigate(val ? `/estudiante-kanban?projectId=${val}` : "/estudiante-kanban");
+  };
 
   return (
     <div className="w-full max-w-full space-y-6 box-border">
@@ -304,7 +332,7 @@ export const EstudianteKanban: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tablero Kanban</h1>
           <p className="text-sm text-gray-500 font-medium mt-0.5">
-            {projectIdParam ? "Filtrado por proyecto seleccionado" : "Proyecto: ClassBoard Equipo A"}
+            {proyectoActivo ? `Proyecto: ${proyectoActivo.name}` : "Mostrando actividades de todos tus proyectos"}
           </p>
         </div>
 
@@ -317,6 +345,19 @@ export const EstudianteKanban: React.FC = () => {
               placeholder="Buscar tarjeta..."
               className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40"
             />
+          </div>
+
+          {/* 🟢 NUEVO: FILTRO DE PROYECTO */}
+          <div className="relative w-full sm:w-44">
+            <FolderOpen size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <select
+              value={projectIdParam || ""}
+              onChange={e => handleFiltroProyectoChange(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40 cursor-pointer"
+            >
+              <option value="">Todos los proyectos</option>
+              {proyectos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </div>
 
           <div className="relative w-full sm:w-40">
@@ -358,12 +399,13 @@ export const EstudianteKanban: React.FC = () => {
             </select>
           </div>
 
-          {(filtroResponsable || filtroPrioridad) && (
+          {(filtroResponsable || filtroPrioridad || projectIdParam) && (
             <button
               type="button"
               onClick={() => {
                 setFiltroResponsable("");
                 setFiltroPrioridad("");
+                navigate("/estudiante-kanban");
               }}
               className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shrink-0"
             >
@@ -373,7 +415,7 @@ export const EstudianteKanban: React.FC = () => {
         </div>
       </div>
 
-      {/* 🟢 HU-030: BARRA DE PROGRESO GENERAL DEL PROYECTO */}
+      {/* BARRA DE PROGRESO GENERAL DEL PROYECTO */}
       {!loading && !errorCarga && (
         <ProgressBar
           totalActividades={totalActividadesProyecto}
@@ -426,7 +468,15 @@ export const EstudianteKanban: React.FC = () => {
                       return (
                       <div key={card.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-all group space-y-3">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="text-xs font-bold text-gray-800 leading-snug flex-1">{card.name}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-gray-800 leading-snug">{card.name}</p>
+                            {/* 🟢 NUEVO: nombre del proyecto en la tarjeta */}
+                            {card.project?.name && (
+                              <span className="inline-block mt-1 px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[9px] font-bold truncate max-w-full">
+                                {card.project.name}
+                              </span>
+                            )}
+                          </div>
                           <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0">
                             <button onClick={() => openEdit(card)} className="p-1 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-gray-50 transition-colors">
                               <Edit2 size={12} />
@@ -636,6 +686,7 @@ export const EstudianteKanban: React.FC = () => {
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha límite</label>
                 <input
                   type="date"
+                  min={new Date().toISOString().split("T")[0]}
                   value={createDraft.deadline}
                   onChange={e => setCreateDraft(d => ({ ...d, deadline: e.target.value }))}
                   className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
