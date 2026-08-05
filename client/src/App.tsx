@@ -23,6 +23,7 @@ import { EstudianteKanban } from './components/EstudianteKanban';
 import { 
   ActividadesPage 
 } from './components/EstudianteVistas';
+import { EntregasPage } from './components/EntregasPage';
 
 // 🟢 Nuevos componentes modulares del estudiante
 import { EstudianteProyectos } from './components/EstudianteProyectos';
@@ -67,7 +68,7 @@ function App() {
           <Route path="/estudiante-dashboard" element={<EstudianteDashboard />} />
           <Route path="/estudiante-proyectos" element={<EstudianteProyectos />} />
           <Route path="/estudiante-actividades" element={<ActividadesPage />} />
-
+          <Route path="/estudiante-entregas" element={<EntregasPage />} />
           
           {/* 🟢 RUTAS FUNCIONALES NUEVAS */}
           <Route path="/estudiante-calendario" element={<CalendarioFuncional />} />
