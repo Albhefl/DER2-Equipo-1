@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Login } from './components/Login';
+import { Register } from './components/Register'; // ← nuevo import
 
 // Importación del Guardián de Seguridad (HU-011.2)
 import { ProtectedRoute } from './components/ProtectedRoute';
@@ -13,6 +14,7 @@ import { EvaluadorFormulario } from './components/EvaluadorFormulario';
 import { EvaluadorPerfil } from './components/EvaluadorPerfil';
 import { EditarPerfilEvaluador } from './components/EditarPerfilEvaluador';
 import { LayoutEvaluador } from './components/LayoutEvaluador';
+import { EvaluadorKanban } from './components/EvaluadorKanban'; // ← nuevo import
 
 // Componentes del Estudiante
 import { LayoutEstudiante } from './components/LayoutEstudiante';
@@ -31,8 +33,9 @@ function App() {
   return (
     <Router>
       <Routes>
-        {/* Ruta Pública */}
+        {/* Rutas Públicas */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} /> {/* ← nueva ruta */}
         
         {/* 🔒 RUTA ENVOLVEDORA PROTEGIDA DEL EVALUADOR (SÓLO PARA EVALUADORES) */}
         <Route 
@@ -50,6 +53,7 @@ function App() {
           <Route path="/evaluador-formulario/:id" element={<EvaluadorFormulario />} />
           <Route path="/evaluador-perfil" element={<EvaluadorPerfil />} />
           <Route path="/evaluador-perfil/editar" element={<EditarPerfilEvaluador />} />
+          <Route path="/evaluador-kanban" element={<EvaluadorKanban />} /> {/* ← nueva ruta */}
         </Route>
 
         {/* 🔒 RUTA ENVOLVEDORA PROTEGIDA DEL ESTUDIANTE (SÓLO PARA ESTUDIANTES) */}

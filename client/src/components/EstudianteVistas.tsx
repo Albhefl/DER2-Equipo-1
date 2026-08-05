@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Search, Plus, Edit2, Clock, CheckCircle2, AlertCircle, 
-  Eye, CheckSquare, ArrowLeft, Send, Link as LinkIcon, FileText, Paperclip, Folder, Circle, Package, Upload, Trash2
+  Eye, CheckSquare, ArrowLeft, Send, FileText, Paperclip, Folder, Circle, Upload, Trash2
 } from 'lucide-react';
 
 import { API_BASE_URL, SERVER_URL } from '../config/apis';
@@ -9,30 +9,49 @@ import { API_BASE_URL, SERVER_URL } from '../config/apis';
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;
 
-
 type EstadoActividad = 'PENDING' | 'IN_PROCESS' | 'IN_REVIEW' | 'DONE';
 type PrioridadActividad = 'HIGH' | 'MED' | 'LOW';
 
 const ESTADO_BADGES: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: 'Pendiente', cls: 'bg-gray-100/80 text-gray-600 font-bold' },
-  IN_PROCESS: { label: 'En Proceso', cls: 'bg-blue-100/80 text-blue-700 font-bold' },
-  IN_REVIEW: { label: 'En Revisión', cls: 'bg-amber-100/80 text-amber-700 font-bold' },
-  DONE: { label: 'Completado', cls: 'bg-emerald-100/80 text-emerald-700 font-bold' },
-  Pendiente: { label: 'Pendiente', cls: 'bg-gray-100/80 text-gray-600 font-bold' },
-  'En Proceso': { label: 'En Proceso', cls: 'bg-blue-100/80 text-blue-700 font-bold' },
-  'En Revisión': { label: 'En Revisión', cls: 'bg-amber-100/80 text-amber-700 font-bold' },
-  Completado: { label: 'Completado', cls: 'bg-emerald-100/80 text-emerald-700 font-bold' },
+  PENDING: { label: 'Pendiente', cls: 'bg-gray-50 text-gray-600 font-medium' },
+  IN_PROCESS: { label: 'En proceso', cls: 'bg-blue-50 text-blue-600 font-medium' },
+  IN_REVIEW: { label: 'En revisión', cls: 'bg-amber-50 text-amber-600 font-medium' },
+  DONE: { label: 'Completado', cls: 'bg-green-50 text-green-600 font-medium' },
+  Pendiente: { label: 'Pendiente', cls: 'bg-gray-50 text-gray-600 font-medium' },
+  'En Proceso': { label: 'En proceso', cls: 'bg-blue-50 text-blue-600 font-medium' },
+  'En Revisión': { label: 'En revisión', cls: 'bg-amber-50 text-amber-600 font-medium' },
+  Completado: { label: 'Completado', cls: 'bg-green-50 text-green-600 font-medium' },
 };
 
+// 🟢 Componente de Prioridad estilo píldora pastel idéntico a Figma
+function PriorityBadge({ priority }: { priority?: PrioridadActividad | string }) {
+  let label = 'Alta';
+  let cls = 'bg-rose-50 text-rose-600'; // Rojo pastel para Alta
+
+  if (priority === 'MED' || priority === 'Media') {
+    label = 'Media';
+    cls = 'bg-amber-50 text-amber-600'; // Ámbar/Amarillo pastel para Media
+  } else if (priority === 'LOW' || priority === 'Baja') {
+    label = 'Baja';
+    cls = 'bg-emerald-50 text-emerald-600'; // Verde pastel para Baja
+  }
+
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 function mapStatusToPrisma(s: string): EstadoActividad {
-  if (s === 'En Proceso' || s === 'IN_PROCESS') return 'IN_PROCESS';
-  if (s === 'En Revisión' || s === 'IN_REVIEW') return 'IN_REVIEW';
-  if (s === 'Completado' || s === 'DONE') return 'DONE';
+  if (s === 'En Proceso' || s === 'IN_PROCESS' || s === 'En proceso') return 'IN_PROCESS';
+  if (s === 'En Revisión' || s === 'IN_REVIEW' || s === 'En revisión') return 'IN_REVIEW';
+  if (s === 'Completado' || s === 'DONE' || s === 'Completada') return 'DONE';
   return 'PENDING';
 }
 
 function formatearFecha(f?: string) {
-  if (!f) return '23/05/2026';
+  if (!f) return '23/05/2025';
   const d = new Date(f);
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
 }
@@ -162,8 +181,8 @@ export const ActividadesPage: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       const [resU, resP] = await Promise.all([
-      fetch(API_USUARIOS_URL, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_BASE_URL}/actividades/proyectos`, { headers: { Authorization: `Bearer ${token}` } })
+        fetch(API_USUARIOS_URL, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/actividades/proyectos`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
       if (resU.ok) {
@@ -428,11 +447,10 @@ export const ActividadesPage: React.FC = () => {
     completadas: actividades.filter(a => mapStatusToPrisma(a.status) === 'DONE').length,
   };
 
+  // 🟢 VISTA DE DETALLE IDÉNTICA A FIGMA
   if (vistaDetalle) {
     const badgeObj = ESTADO_BADGES[vistaDetalle.status] || ESTADO_BADGES['PENDING'];
     const nombreProyecto = proyectosDisponibles.find(p => p.id === vistaDetalle.projectId)?.name || 'ClassBoard Equipo A';
-
-    // Comentarios limpios filtrando los datos internos de evaluación JSON
     const comentariosVisibles = comentarios.filter(c => !c.content.startsWith('__EVALUACION_JSON__:'));
 
     return (
@@ -458,16 +476,17 @@ export const ActividadesPage: React.FC = () => {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 text-xs font-semibold">
-            <span className="text-gray-400">Estado:</span>
-            <span className={`px-3 py-1 rounded-full ${badgeObj.cls}`}>{badgeObj.label}</span>
+          <div className="flex items-center gap-2.5 text-xs">
+            <span className="text-gray-400 font-medium">Estado:</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${badgeObj.cls}`}>{badgeObj.label}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
+          
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Descripción</h3>
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Descripción</h3>
               <p className="text-xs text-gray-600 leading-relaxed">
                 {vistaDetalle.description || 'Analizar necesidades y comportamientos de los usuarios del sistema.'}
               </p>
@@ -481,9 +500,9 @@ export const ActividadesPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-gray-400 font-medium">Prioridad</p>
-                  <p className="font-bold text-red-600 mt-0.5">
-                    {vistaDetalle.priority === 'HIGH' ? 'Alta' : vistaDetalle.priority === 'LOW' ? 'Baja' : 'Media'}
-                  </p>
+                  <div className="mt-0.5">
+                    <PriorityBadge priority={vistaDetalle.priority} />
+                  </div>
                 </div>
                 <div>
                   <p className="text-gray-400 font-medium">Fecha límite</p>
@@ -492,8 +511,8 @@ export const ActividadesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                 Comentarios ({comentariosVisibles.length})
               </h3>
 
@@ -549,8 +568,8 @@ export const ActividadesPage: React.FC = () => {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
                 Evidencias ({evidencias.length})
               </h3>
 
@@ -558,7 +577,7 @@ export const ActividadesPage: React.FC = () => {
                 {evidencias.map((e) => (
                   <div
                     key={e.id}
-                    className="flex items-center justify-between p-2.5 bg-gray-50/80 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700"
+                    className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700"
                   >
                     <div className="flex items-center gap-2 truncate pr-2">
                       <FileText size={14} className="text-gray-500 shrink-0" />
@@ -600,7 +619,6 @@ export const ActividadesPage: React.FC = () => {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-[11px] font-bold text-gray-700 flex items-center gap-1 cursor-pointer shrink-0"
-                      title="Subir archivo (PDF/DOCX/etc.)"
                     >
                       <Upload size={13} /> Archivo
                     </button>
@@ -631,23 +649,23 @@ export const ActividadesPage: React.FC = () => {
             </div>
 
             {evaluacion && (
-              <div className="bg-blue-50/60 p-6 rounded-2xl border border-blue-100 shadow-sm space-y-3 text-xs">
+              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-3 text-xs">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider">Evaluación</h3>
-                  <span className="text-blue-700 font-extrabold text-sm">{evaluacion.score} / 10</span>
+                  <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Evaluación</h3>
+                  <span className="text-blue-600 font-extrabold text-sm">{evaluacion.score} / 10</span>
                 </div>
 
-                <div className="space-y-1.5 pt-2 border-t border-blue-100">
+                <div className="space-y-1.5 pt-2 border-t border-gray-50">
                   {evaluacion.criteria?.map((crit) => (
                     <div key={crit.id} className="flex justify-between text-gray-600">
                       <span>{crit.nombre}</span>
-                      <span className="font-bold">{crit.score}/5</span>
+                      <span className="font-bold text-gray-800">{crit.score}/5</span>
                     </div>
                   ))}
                 </div>
 
                 {evaluacion.comentario && (
-                  <p className="text-gray-600 pt-2 border-t border-blue-100 leading-relaxed">
+                  <p className="text-gray-600 pt-2 border-t border-gray-50 leading-relaxed">
                     {evaluacion.comentario}
                   </p>
                 )}
@@ -660,8 +678,8 @@ export const ActividadesPage: React.FC = () => {
               </div>
             )}
 
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-3 text-xs">
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Información</h3>
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-3 text-xs">
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Información</h3>
               <div className="flex justify-between text-gray-500">
                 <span>Proyecto</span>
                 <span className="font-bold text-blue-600">{nombreProyecto}</span>
@@ -675,6 +693,19 @@ export const ActividadesPage: React.FC = () => {
                 <span className="font-bold text-gray-800">Juan Pérez</span>
               </div>
             </div>
+
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-3 text-xs">
+              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Checklist</h3>
+              <div className="space-y-2">
+                {['Definir segmentos de usuarios', 'Diseñar encuesta', 'Aplicar entrevistas', 'Analizar resultados'].map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-2.5 text-xs text-gray-600 font-medium">
+                    <CheckSquare size={14} className="text-gray-800 shrink-0" />
+                    <span>{item}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -701,60 +732,60 @@ export const ActividadesPage: React.FC = () => {
             });
             setCreateModalOpen(true);
           }}
-          className="px-4 py-2 bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-gray-900 transition cursor-pointer"
+          className="px-4 py-2.5 bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs hover:bg-gray-900 transition cursor-pointer"
         >
           <Plus size={15} /> Agregar actividad
         </button>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-            <CheckSquare size={18} />
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <CheckSquare size={20} />
           </div>
           <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.total}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Total</p>
+            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.total}</p>
+            <p className="text-xs text-gray-400 font-medium">Total de actividades</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center shrink-0">
-            <Clock size={18} />
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center shrink-0">
+            <Clock size={20} />
           </div>
           <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.pendientes}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Pendientes</p>
+            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.pendientes}</p>
+            <p className="text-xs text-gray-400 font-medium">Pendientes</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <AlertCircle size={18} />
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <AlertCircle size={20} />
           </div>
           <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.enProceso}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">En Proceso</p>
+            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.enProceso}</p>
+            <p className="text-xs text-gray-400 font-medium">En proceso</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <Eye size={18} />
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+            <Eye size={20} />
           </div>
           <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.enRevision}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">En Revisión</p>
+            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.enRevision}</p>
+            <p className="text-xs text-gray-400 font-medium">En revisión</p>
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
-            <CheckCircle2 size={18} />
+        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
+          <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
+            <CheckCircle2 size={20} />
           </div>
           <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.completadas}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Completadas</p>
+            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.completadas}</p>
+            <p className="text-xs text-gray-400 font-medium">Completadas</p>
           </div>
         </div>
       </div>
@@ -766,7 +797,7 @@ export const ActividadesPage: React.FC = () => {
             value={search} 
             onChange={e => setSearch(e.target.value)} 
             placeholder="Buscar actividad..." 
-            className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200/80 rounded-xl text-xs font-medium focus:outline-none focus:border-gray-300 transition" 
+            className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200/80 rounded-xl text-xs font-medium focus:outline-none focus:border-gray-300 transition" 
           />
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -780,7 +811,7 @@ export const ActividadesPage: React.FC = () => {
             <button 
               key={f.key} 
               onClick={() => setFilterStatus(f.key)} 
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
                 filterStatus === f.key ? 'bg-black text-white' : 'bg-white border border-gray-200/80 text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -805,7 +836,7 @@ export const ActividadesPage: React.FC = () => {
                 <div 
                   key={act.id} 
                   onClick={() => setActividadSeleccionada(act)}
-                  className={`bg-white p-4 rounded-2xl border transition cursor-pointer shadow-sm flex items-center justify-between gap-4 ${
+                  className={`bg-white p-5 rounded-2xl border transition cursor-pointer shadow-xs flex items-center justify-between gap-4 ${
                     isSelected ? 'border-gray-300 ring-1 ring-gray-200' : 'border-gray-100 hover:border-gray-200'
                   }`}
                 >
@@ -814,13 +845,13 @@ export const ActividadesPage: React.FC = () => {
                       {renderStatusIcon(act.status)}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-bold text-gray-900 text-xs truncate">{act.name}</h4>
-                      <p className="text-[11px] text-gray-400 font-medium mt-0.5">Fecha límite: {formatearFecha(act.deadline)}</p>
+                      <h4 className="font-bold text-gray-900 text-sm truncate">{act.name}</h4>
+                      <p className="text-xs text-gray-400 font-medium mt-0.5">Fecha límite: {formatearFecha(act.deadline)}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] ${badge.cls}`}>
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${badge.cls}`}>
                       {badge.label}
                     </span>
                     <button 
@@ -828,7 +859,7 @@ export const ActividadesPage: React.FC = () => {
                         e.stopPropagation();
                         setVistaDetalle(act);
                       }}
-                      className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition cursor-pointer"
+                      className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
                     >
                       Ver detalle
                     </button>
@@ -837,7 +868,7 @@ export const ActividadesPage: React.FC = () => {
                         e.stopPropagation();
                         abrirEditar(act);
                       }}
-                      className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-xs font-bold px-1 transition cursor-pointer"
+                      className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-xs font-bold px-1.5 transition cursor-pointer"
                     >
                       <Edit2 size={13} /> Editar
                     </button>
@@ -853,21 +884,19 @@ export const ActividadesPage: React.FC = () => {
         </div>
 
         {actividadSeleccionada && (
-          <div className="w-full lg:w-72 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shrink-0 space-y-4 lg:sticky lg:top-6 text-xs">
+          <div className="w-full lg:w-80 bg-white p-6 rounded-2xl border border-gray-100 shadow-xs shrink-0 space-y-5 lg:sticky lg:top-6 text-xs">
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">DETALLE RÁPIDO</p>
+              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-1">DETALLE RÁPIDO</p>
               <h3 className="font-bold text-gray-900 text-sm leading-snug">{actividadSeleccionada.name}</h3>
-              <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+              <p className="text-xs text-gray-400 mt-1 leading-relaxed">
                 {actividadSeleccionada.description || 'Analizar necesidades y comportamientos de los usuarios del sistema.'}
               </p>
             </div>
 
-            <div className="space-y-2 border-t border-gray-50 pt-3">
+            <div className="space-y-3 border-t border-gray-50 pt-4 text-xs">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Prioridad</span>
-                <span className="text-[11px] font-extrabold text-red-600">
-                  {actividadSeleccionada.priority === 'HIGH' ? 'Alta' : 'Media'}
-                </span>
+                <PriorityBadge priority={actividadSeleccionada.priority} />
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Fecha límite</span>
@@ -885,33 +914,15 @@ export const ActividadesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="border-t border-gray-50 pt-3 space-y-2">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Checklist</p>
-              <div className="space-y-1.5">
+            <div className="border-t border-gray-50 pt-4 space-y-2.5">
+              <p className="text-xs font-bold text-gray-900">Checklist</p>
+              <div className="space-y-2">
                 {['Definir segmentos de usuarios', 'Diseñar encuesta', 'Aplicar entrevistas', 'Analizar resultados'].map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-xs text-gray-600 font-medium">
-                    <CheckSquare size={13} className="text-slate-800 shrink-0" />
+                  <div key={idx} className="flex items-center gap-2.5 text-xs text-gray-600 font-medium">
+                    <CheckSquare size={14} className="text-gray-800 shrink-0" />
                     <span>{item}</span>
                   </div>
                 ))}
-              </div>
-            </div>
-
-            <div className="border-t border-gray-50 pt-3 space-y-2 text-xs">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Próximas entregas</p>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-gray-600 text-[11px]">
-                  <span>Investigar usuarios</span>
-                  <span className="font-bold text-gray-800">23/05/2025</span>
-                </div>
-                <div className="flex justify-between text-gray-600 text-[11px]">
-                  <span>Definir alcance</span>
-                  <span className="font-bold text-gray-800">25/05/2025</span>
-                </div>
-                <div className="flex justify-between text-gray-600 text-[11px]">
-                  <span>Diseño de interfaz</span>
-                  <span className="font-bold text-gray-800">27/05/2025</span>
-                </div>
               </div>
             </div>
           </div>
@@ -1037,7 +1048,7 @@ export const ActividadesPage: React.FC = () => {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-sm cursor-pointer"
+                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-xs cursor-pointer"
                 >
                   Crear actividad
                 </button>
@@ -1164,7 +1175,7 @@ export const ActividadesPage: React.FC = () => {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-sm cursor-pointer"
+                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-xs cursor-pointer"
                 >
                   Guardar cambios
                 </button>
@@ -1176,497 +1187,3 @@ export const ActividadesPage: React.FC = () => {
     </div>
   );
 };
-
-type EstadoEntrega = "Pendiente" | "En Revisión" | "Aprobado" | "Completada";
-
-export type Entrega = {
-  id: string;
-  title: string;
-  description: string;
-  dueDate: string;
-  format: string;
-  status: EstadoEntrega;
-  evidence: { id: string; url: string; isLink?: boolean }[];
-};
-
-function StatCardEntrega({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50 box-border">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-lg font-black text-gray-900 leading-none">{value}</p>
-        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">{label}</p>
-      </div>
-    </div>
-  );
-}
-
-export const EntregasPage: React.FC = () => {
-  const [entregas, setEntregas] = useState<Entrega[]>([]);
-  const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("Todos");
-  const [loading, setLoading] = useState(true);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"file" | "link">("file");
-  const [linkInput, setLinkInput] = useState("");
-  const [entregaTargetId, setEntregaTargetId] = useState<string | null>(null);
-  const [subiendo, setSubiendo] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const fetchEntregasReal = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(API_ACTIVIDADES_URL, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const listaRaw = data.actividades || data || [];
-
-        const listaMapeada: Entrega[] = listaRaw.map((a: any) => {
-          let st: EstadoEntrega = "Pendiente";
-          if (a.status === "IN_REVIEW" || a.status === "En Revisión") st = "En Revisión";
-          if (a.status === "APPROVED" || a.status === "Aprobado") st = "Aprobado";
-          if (a.status === "DONE" || a.status === "Completado" || a.status === "Completada") st = "Completada";
-
-          const listaEvidencias = a.evidencias || a.evidence || [];
-          const evidenciasLimpias = listaEvidencias
-            .filter((e: any) => e && (e.url || e.contenido) && !String(e.url || e.contenido).includes('undefined'))
-            .map((e: any) => {
-              const urlVal = String(e.url || e.contenido);
-              return {
-                id: String(e.id || Date.now()),
-                url: urlVal,
-                isLink: urlVal.startsWith("http://") || urlVal.startsWith("https://")
-              };
-            });
-
-          return {
-            id: String(a.id),
-            title: a.name || a.title || "Entrega de proyecto",
-            description: a.description || "Sub reporte de hallazgos y evidencias correspondientes.",
-            dueDate: a.deadline ? new Date(a.deadline).toLocaleDateString("es-MX") : "23/05/2026",
-            format: "PDF / DOCX / LINK",
-            status: st,
-            evidence: evidenciasLimpias
-          };
-        });
-
-        setEntregas(listaMapeada);
-
-        if (listaMapeada.length > 0) {
-          setSelectedEntrega(prev => {
-            if (!prev) return listaMapeada[0];
-            const actualizada = listaMapeada.find(item => item.id === prev.id);
-            return actualizada || listaMapeada[0];
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Error al obtener entregas desde la API:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchEntregasReal();
-  }, []);
-
-  const abrirModalSubida = (entregaId: string) => {
-    setEntregaTargetId(entregaId);
-    setLinkInput("");
-    setActiveTab("file");
-    setModalOpen(true);
-  };
-
-  const handleGuardarLink = async () => {
-    if (!linkInput.trim() || !entregaTargetId) return;
-
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_ACTIVIDADES_URL}/${entregaTargetId}/evidencias`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ url: linkInput.trim() })
-      });
-
-      if (res.ok) {
-        await fetchEntregasReal();
-      } else {
-        alert("Error al guardar el enlace.");
-      }
-    } catch (err) {
-      console.error("Error al guardar link:", err);
-    } finally {
-      setModalOpen(false);
-    }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !entregaTargetId) return;
-
-    setSubiendo(true);
-    try {
-      const token = localStorage.getItem("token");
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch(`${API_ACTIVIDADES_URL}/${entregaTargetId}/evidencias/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
-      });
-
-      if (res.ok) {
-        await fetchEntregasReal();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.message || "Error al subir el archivo.");
-      }
-    } catch (err) {
-      console.error("Error al subir archivo:", err);
-    } finally {
-      setSubiendo(false);
-      if (e.target) e.target.value = '';
-      setModalOpen(false);
-    }
-  };
-
-  const handleEliminarEvidencia = async (evidenciaId: string) => {
-    if (!confirm("¿Deseas eliminar esta evidencia?")) return;
-
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_ACTIVIDADES_URL}/evidencias/${evidenciaId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (res.ok) {
-        await fetchEntregasReal();
-      }
-    } catch (err) {
-      console.error("Error al eliminar evidencia:", err);
-    }
-  };
-
-  const entregasFiltradas = entregas.filter(e => {
-    const coincideEstado = filterStatus === "Todos" || e.status === filterStatus;
-    const coincideBusqueda = e.title.toLowerCase().includes(search.toLowerCase());
-    return coincideEstado && coincideBusqueda;
-  });
-
-  const getBadgeStyle = (status: EstadoEntrega) => {
-    switch (status) {
-      case "Pendiente": return "bg-gray-100/80 text-gray-600 font-bold";
-      case "En Revisión": return "bg-amber-100/80 text-amber-700 font-bold";
-      case "Aprobado": return "bg-emerald-100/80 text-emerald-700 font-bold";
-      case "Completada": return "bg-green-100/80 text-green-700 font-bold";
-    }
-  };
-
-  const counts = {
-    total: entregas.length,
-    pendientes: entregas.filter(e => e.status === "Pendiente").length,
-    enRevision: entregas.filter(e => e.status === "En Revisión").length,
-    aprobados: entregas.filter(e => e.status === "Aprobado").length,
-    completadas: entregas.filter(e => e.status === "Completada").length,
-  };
-
-  return (
-    <div className="p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border">
-      
-      <input 
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".pdf,.docx,.doc,.png,.jpg,.zip"
-        className="hidden"
-      />
-
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Entregas</h1>
-        <p className="text-xs text-gray-400 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">
-        <StatCardEntrega label="Total" value={counts.total} color="bg-indigo-50 text-indigo-600" icon={<Package size={18} />} />
-        <StatCardEntrega label="Pendientes" value={counts.pendientes} color="bg-gray-50 text-gray-400" icon={<Clock size={18} />} />
-        <StatCardEntrega label="En Revisión" value={counts.enRevision} color="bg-amber-50 text-amber-600" icon={<Eye size={18} />} />
-        <StatCardEntrega label="Aprobados" value={counts.aprobados} color="bg-emerald-50 text-emerald-600" icon={<CheckCircle2 size={18} />} />
-        <StatCardEntrega label="Completadas" value={counts.completadas} color="bg-green-50 text-green-600" icon={<CheckCircle2 size={18} />} />
-      </div>
-
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input 
-            value={search} 
-            onChange={e => setSearch(e.target.value)} 
-            placeholder="Buscar entrega..." 
-            className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200/80 rounded-xl text-xs font-medium focus:outline-none focus:border-gray-300 transition" 
-          />
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {['Todos', 'Pendiente', 'En Revisión', 'Aprobado', 'Completada'].map(s => (
-            <button 
-              key={s} 
-              onClick={() => setFilterStatus(s)} 
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                filterStatus === s 
-                  ? 'bg-black text-white' 
-                  : 'bg-white border border-gray-200/80 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-5 items-start w-full">
-        
-        <div className="flex-1 w-full space-y-3">
-          {loading ? (
-            <div className="p-8 text-center text-xs text-gray-400 bg-white rounded-2xl border border-gray-100">
-              Cargando entregas...
-            </div>
-          ) : entregasFiltradas.length > 0 ? (
-            entregasFiltradas.map((e) => {
-              const isSelected = selectedEntrega?.id === e.id;
-
-              return (
-                <div 
-                  key={e.id} 
-                  onClick={() => setSelectedEntrega(e)}
-                  className={`bg-white p-4 rounded-2xl border transition cursor-pointer shadow-sm flex items-center justify-between gap-4 ${
-                    isSelected ? 'border-gray-300 ring-1 ring-gray-200' : 'border-gray-100 hover:border-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                    <div className="shrink-0 text-slate-800">
-                      <FileText size={20} />
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-gray-900 text-xs truncate">{e.title}</h4>
-                      <p className="text-[11px] text-gray-400 font-medium mt-0.5">{e.description}</p>
-                      <p className="text-[10px] text-gray-400 font-semibold mt-1">
-                        Fecha límite: {e.dueDate} &nbsp;·&nbsp; Formato: {e.format}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase ${getBadgeStyle(e.status)}`}>
-                      {e.status}
-                    </span>
-                    <button 
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        abrirModalSubida(e.id);
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition cursor-pointer"
-                    >
-                      <Upload size={12} /> Subir
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="p-8 text-center text-xs text-gray-400 bg-white rounded-2xl border border-gray-100">
-              No se encontraron entregas.
-            </div>
-          )}
-        </div>
-
-        {selectedEntrega && (
-          <div className="w-full lg:w-72 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shrink-0 space-y-4 lg:sticky lg:top-6 text-xs">
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">DETALLE DE ENTREGA</p>
-              <h3 className="font-bold text-gray-900 text-sm leading-snug">{selectedEntrega.title}</h3>
-              <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{selectedEntrega.description}</p>
-            </div>
-
-            <div className="space-y-2 border-t border-gray-50 pt-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Estado</span>
-                <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase ${getBadgeStyle(selectedEntrega.status)}`}>
-                  {selectedEntrega.status}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Fecha límite</span>
-                <span className="font-bold text-gray-800">{selectedEntrega.dueDate}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Formato</span>
-                <span className="font-bold text-gray-800">{selectedEntrega.format}</span>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-50 pt-3 space-y-2">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                Evidencias ({selectedEntrega.evidence?.length || 0})
-              </p>
-
-              {selectedEntrega.evidence && selectedEntrega.evidence.length > 0 ? (
-                <div className="space-y-1.5">
-                  {selectedEntrega.evidence.map((ev) => (
-                    <div key={ev.id} className="flex items-center justify-between p-2 bg-gray-50/80 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700">
-                      <div className="flex items-center gap-1.5 truncate max-w-[170px]">
-                        {ev.isLink ? (
-                          <LinkIcon size={13} className="text-blue-600 shrink-0" />
-                        ) : (
-                          <FileText size={13} className="text-slate-700 shrink-0" />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => abrirEvidenciaUrl(ev.url)}
-                          className="truncate hover:underline text-slate-800 font-bold text-left cursor-pointer"
-                          title={ev.url}
-                        >
-                          {ev.url}
-                        </button>
-                      </div>
-                      <button 
-                        onClick={() => handleEliminarEvidencia(ev.id)}
-                        className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0"
-                        title="Eliminar evidencia"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400 italic">Sin evidencias.</p>
-              )}
-
-              <button 
-                onClick={() => abrirModalSubida(selectedEntrega.id)}
-                className="w-full py-2 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer mt-2"
-              >
-                <Paperclip size={13} /> Adjuntar archivo o enlace
-              </button>
-            </div>
-
-            <div className="border-t border-gray-50 pt-3 space-y-2 text-xs">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Historial / próximas entregas</p>
-              <div className="space-y-1.5">
-                {entregas.slice(0, 3).map((item) => (
-                  <div key={item.id} className="flex justify-between text-gray-600 text-[11px]">
-                    <span className="truncate max-w-[130px] font-medium">{item.title}</span>
-                    <span className="font-bold text-gray-800">{item.dueDate}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        )}
-
-      </div>
-
-        {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl space-y-4 relative">
-            <h3 className="text-sm font-bold text-gray-900 uppercase">Adjuntar Evidencia</h3>
-            <p className="text-xs text-gray-400">Selecciona el tipo de entrega que deseas registrar.</p>
-
-            <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
-              <button
-                type="button"
-                onClick={() => setActiveTab("file")}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
-                  activeTab === "file" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900"
-                }`}
-              >
-                Archivo local (PDF/DOCX)
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("link")}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
-                  activeTab === "link" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900"
-                }`}
-              >
-                Enlace Web
-              </button>
-            </div>
-
-            {activeTab === "file" && (
-              <div className="space-y-3 py-2 text-center">
-                <div 
-                  onClick={() => !subiendo && fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-200 hover:border-gray-400 p-6 rounded-2xl cursor-pointer transition flex flex-col items-center gap-2 bg-gray-50/50"
-                >
-                  <Upload size={24} className="text-gray-400" />
-                  <p className="text-xs font-bold text-gray-700">
-                    {subiendo ? "Subiendo archivo..." : "Haz clic aquí para examinar tus archivos"}
-                  </p>
-                  <p className="text-[10px] text-gray-400">Formatos soportados: PDF, DOCX, PNG, ZIP</p>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "link" && (
-              <div className="space-y-3 py-2">
-                <label className="block text-xs font-bold text-gray-700">Enlace URL *</label>
-                <input 
-                  type="url"
-                  placeholder="https://drive.google.com/... o https://figma.com/..."
-                  value={linkInput}
-                  onChange={e => setLinkInput(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={handleGuardarLink}
-                  className="w-full py-2.5 bg-black text-white rounded-xl text-xs font-bold hover:bg-gray-900 transition"
-                >
-                  Guardar enlace
-                </button>
-              </div>
-            )}
-
-            <div className="flex justify-end pt-2 border-t border-gray-50">
-              <button 
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-};
-
-export const CalendarioPage: React.FC = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold text-gray-900">Calendario</h1>
-  </div>
-);
-
-export const PerfilPage: React.FC = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold text-gray-900">Perfil</h1>
-  </div>
-);
