@@ -14,7 +14,7 @@ export const LayoutEstudiante: React.FC = () => {
     { label: "Dashboard", path: "/estudiante-dashboard", icon: <LayoutDashboard size={18} /> },
     { label: "Proyectos", path: "/estudiante-proyectos", icon: <FolderOpen size={18} /> },
     { label: "Actividades", path: "/estudiante-actividades", icon: <ListChecks size={18} /> },
-    { label: "Entregas", path: "/estudiante-entregas", icon: <Package size={18} /> },
+    { label: "Entregas", path: "/estudiante-actividades", icon: <Package size={18} /> },
     { label: "Calendario", path: "/estudiante-calendario", icon: <CalendarDays size={18} /> },
     { label: "Tablero Kanban", path: "/estudiante-kanban", icon: <LayoutGrid size={18} /> },
     { label: "Perfil", path: "/estudiante-perfil", icon: <User size={18} /> },
