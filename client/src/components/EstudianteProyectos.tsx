@@ -4,7 +4,7 @@ import {
   Plus, Search, FolderOpen, Edit2, ArrowLeft,
   CheckCircle2, AlertCircle, Eye, CheckSquare 
 } from 'lucide-react';
-import { API_BASE_URL } from '../config/apis';
+import { API_BASE_URL } from '../config/api';
 
 function Badge({ label }: { label: string }) {
   let cls = 'bg-gray-50 text-gray-600';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Search } from 'lucide-react';
-import { API_BASE_URL } from '../config/apis';
+import { API_BASE_URL } from '../config/api';
 
 interface EventoCalendario {
   title: string;

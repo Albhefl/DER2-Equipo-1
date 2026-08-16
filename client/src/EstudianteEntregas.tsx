@@ -3,10 +3,9 @@ import {
   Package, Clock, Eye, CheckCircle2, Search, FileText, Upload, Trash2, Paperclip, Link as LinkIcon 
 } from 'lucide-react';
 
-import { API_BASE_URL, SERVER_URL } from './config/apis';   // ← ojo: "./" no "../" porque este archivo vive en src/, no en src/components/
+import { API_BASE_URL, SERVER_URL } from './config/api';
 
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
-// Elimina la línea "const SERVER_URL = ..." — ya viene del import
 
 type EstadoEntrega = "Pendiente" | "En Revisión" | "Aprobado" | "Completada";
 
@@ -34,6 +33,18 @@ function StatCard({ label, value, color, icon }: { label: string; value: number;
   );
 }
 
+// 🟢 Lee el nombre del estudiante logueado desde localStorage (guardado en el Login)
+function getUserNameFromStorage() {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return 'Estudiante';
+    const user = JSON.parse(userStr);
+    return user.name || 'Estudiante';
+  } catch {
+    return 'Estudiante';
+  }
+}
+
 export const EstudianteEntregas: React.FC = () => {
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null);
@@ -48,6 +59,7 @@ export const EstudianteEntregas: React.FC = () => {
   const [subiendo, setSubiendo] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const nombreEstudiante = getUserNameFromStorage();
 
 const fetchEntregasReal = async () => {
     setLoading(true);
@@ -265,7 +277,7 @@ const fetchEntregasReal = async () => {
 
       <div>
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Entregas</h1>
-        <p className="text-xs text-gray-400 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
+        <p className="text-xs text-gray-400 font-medium mt-0.5">{nombreEstudiante}</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">

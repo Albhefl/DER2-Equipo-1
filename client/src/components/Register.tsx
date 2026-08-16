@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useNavigate, Link } from 'react-router-dom';
-import { API_BASE_URL } from '../config/apis';
+import { API_BASE_URL } from '../config/api';
 
 /**
  * ESQUEMA DE VALIDACIÓN CON ZOD
@@ -14,25 +14,35 @@ const registerSchema = z
   .object({
     name: z
       .string()
-      .min(1, { error: 'El nombre completo es obligatorio.' })
-      .min(3, { error: 'El nombre debe tener al menos 3 caracteres.' }),
+      .min(1, { message: 'El nombre completo es obligatorio.' })
+      .min(3, { message: 'El nombre debe tener al menos 3 caracteres.' })
+      .regex(/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/, { 
+        message: 'El nombre solo puede contener letras y espacios.' 
+      }),
     email: z
       .string()
-      .min(1, { error: 'El correo electrónico es obligatorio.' })
-      .email({ error: 'Formato de correo electrónico inválido.' }),
+      .min(1, { message: 'El correo electrónico es obligatorio.' })
+      .email({ message: 'Formato de correo electrónico inválido.' }),
     role: z.enum(['STUDENT', 'EVALUATOR'], {
       error: 'Selecciona un tipo de usuario válido.',
     }),
+    
+    // 👇 ESTA ES LA PARTE QUE ACTUALIZAMOS 👇
     password: z
       .string()
-      .min(1, { error: 'La contraseña es obligatoria.' })
-      .min(8, { error: 'La contraseña debe tener al menos 8 caracteres.' }),
+      .min(1, { message: 'La contraseña es obligatoria.' })
+      .min(8, { message: 'Debe tener al menos 8 caracteres.' })
+      .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d]+$/, {
+        message: 'La contraseña debe incluir una mayúscula, una minúscula, un número y NO debe contener símbolos.',
+      }),
+    // 👆 HASTA AQUÍ 👆
+
     confirmPassword: z
       .string()
-      .min(1, { error: 'Confirma tu contraseña.' }),
+      .min(1, { message: 'Confirma tu contraseña.' }),
   })
   .refine((data) => data.password === data.confirmPassword, {
-    error: 'Las contraseñas no coinciden.',
+    message: 'Las contraseñas no coinciden.',
     path: ['confirmPassword'],
   });
 
@@ -43,6 +53,7 @@ export const Register: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const {
     register,
@@ -62,6 +73,7 @@ export const Register: React.FC = () => {
    */
   const onSubmit = async (data: RegisterFormData) => {
     setBackendError(null);
+    setSuccessMessage(null);
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
@@ -83,8 +95,14 @@ export const Register: React.FC = () => {
         throw new Error(resData.message || 'Error al registrar la cuenta. Intenta de nuevo.');
       }
 
-      alert('¡Cuenta creada exitosamente! Ahora puedes iniciar sesión.');
-      navigate('/login'); // Redirige usando react-router
+      // Mostrar alerta visual de éxito
+      setSuccessMessage('¡Cuenta creada exitosamente! Redirigiendo al inicio de sesión...');
+      
+      // Esperar 2.5 segundos y redirigir
+      setTimeout(() => {
+        navigate('/login');
+      }, 2500);
+
     } catch (error: any) {
       console.error('Error en el registro:', error);
       setBackendError(error.message || 'No se pudo conectar con el servidor. Intenta más tarde.');
@@ -115,9 +133,19 @@ export const Register: React.FC = () => {
       <div className="bg-white p-9 rounded-[20px] border border-[#E5E7EB] w-full max-w-[400px] shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
 
         {/* ALERTA DE ERROR GENERAL (errores del backend) */}
-        {backendError && (
+        {backendError && !successMessage && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm p-2.5 rounded-xl text-center font-medium">
             {backendError}
+          </div>
+        )}
+
+        {/* ALERTA DE ÉXITO VISUAL */}
+        {successMessage && (
+          <div className="mb-4 bg-[#ECFDF5] border border-[#A7F3D0] text-[#065F46] text-sm p-3 rounded-xl text-center font-medium flex flex-col items-center gap-2 animate-pulse">
+            <svg className="w-6 h-6 text-[#10B981]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {successMessage}
           </div>
         )}
 
@@ -133,6 +161,7 @@ export const Register: React.FC = () => {
               type="text"
               id="name"
               placeholder="Ej. Ana García Pérez"
+              disabled={!!successMessage}
               className={`w-full px-4 py-2.5 rounded-xl text-[#111827] placeholder-[#687280] border focus:outline-none transition-all text-[15px] ${
                 errors.name
                   ? 'bg-red-50 border-2 border-red-500'
@@ -154,6 +183,7 @@ export const Register: React.FC = () => {
               type="email"
               id="email"
               placeholder="email@example.com"
+              disabled={!!successMessage}
               className={`w-full px-4 py-2.5 rounded-xl text-[#111827] placeholder-[#687280] border focus:outline-none transition-all text-[15px] ${
                 errors.email
                   ? 'bg-red-50 border-2 border-red-500'
@@ -165,7 +195,7 @@ export const Register: React.FC = () => {
             )}
           </div>
 
-          {/* CAMPO: TIPO DE USUARIO / ROL (registro dual) */}
+          {/* CAMPO: TIPO DE USUARIO / ROL */}
           <div className="flex flex-col gap-1.5">
             <label htmlFor="role" className="text-[15px] font-regular text-[#111827]">
               Tipo de usuario / Rol
@@ -173,6 +203,7 @@ export const Register: React.FC = () => {
             <select
               {...register('role')}
               id="role"
+              disabled={!!successMessage}
               className="w-full px-4 py-2.5 rounded-xl text-[#111827] border bg-[#F6F7FB] border-[#E5E7EB] focus:border-[#94A3BB] focus:outline-none transition-all text-[15px]"
             >
               <option value="STUDENT">Estudiante</option>
@@ -194,6 +225,7 @@ export const Register: React.FC = () => {
                 type={showPassword ? 'text' : 'password'}
                 id="password"
                 placeholder="••••••••••••"
+                disabled={!!successMessage}
                 className={`w-full px-4 py-2.5 rounded-xl text-[#111827] placeholder-[#687280] border focus:outline-none transition-all pr-12 text-[15px] ${
                   errors.password
                     ? 'bg-red-50 border-2 border-red-500'
@@ -203,7 +235,8 @@ export const Register: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#687280] hover:text-[#111827] transition-colors"
+                disabled={!!successMessage}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#687280] hover:text-[#111827] transition-colors disabled:opacity-50"
                 aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -228,6 +261,7 @@ export const Register: React.FC = () => {
                 type={showConfirmPassword ? 'text' : 'password'}
                 id="confirmPassword"
                 placeholder="••••••••••••"
+                disabled={!!successMessage}
                 className={`w-full px-4 py-2.5 rounded-xl text-[#111827] placeholder-[#687280] border focus:outline-none transition-all pr-12 text-[15px] ${
                   errors.confirmPassword
                     ? 'bg-red-50 border-2 border-red-500'
@@ -237,7 +271,8 @@ export const Register: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#687280] hover:text-[#111827] transition-colors"
+                disabled={!!successMessage}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#687280] hover:text-[#111827] transition-colors disabled:opacity-50"
                 aria-label={showConfirmPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -254,10 +289,10 @@ export const Register: React.FC = () => {
           {/* BOTÓN DE ACCIÓN PRINCIPAL */}
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || !!successMessage}
             className="w-full bg-[#0B1026] hover:bg-opacity-95 text-white font-semibold py-3 px-4 rounded-xl transition-all text-[16px] mt-2 disabled:opacity-50 cursor-pointer"
           >
-            {isSubmitting ? 'Creando cuenta...' : 'Crear cuenta'}
+            {isSubmitting ? 'Creando cuenta...' : successMessage ? 'Redirigiendo...' : 'Crear cuenta'}
           </button>
 
           {/* DIVISOR INTERMEDIO */}

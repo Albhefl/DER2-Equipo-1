@@ -4,7 +4,7 @@ import {
   Eye, CheckSquare, ArrowLeft, Send, FileText, Paperclip, Folder, Circle, Upload, Trash2
 } from 'lucide-react';
 
-import { API_BASE_URL, SERVER_URL } from '../config/apis';
+import { API_BASE_URL, SERVER_URL } from '../config/api';
 
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;
@@ -114,6 +114,18 @@ function abrirEvidenciaUrl(url: string) {
   }
 }
 
+// 🟢 Lee el nombre del estudiante logueado desde localStorage (guardado en el Login)
+function getUserNameFromStorage() {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return 'Estudiante';
+    const user = JSON.parse(userStr);
+    return user.name || 'Estudiante';
+  } catch {
+    return 'Estudiante';
+  }
+}
+
 export const ActividadesPage: React.FC = () => {
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [usuariosDisponibles, setUsuariosDisponibles] = useState<Miembro[]>([]);
@@ -158,6 +170,7 @@ export const ActividadesPage: React.FC = () => {
   };
 
   const currentUserId = getUserIdFromToken();
+  const nombreEstudiante = getUserNameFromStorage();
 
   const fetchActividades = async () => {
     setLoading(true);
@@ -450,7 +463,7 @@ export const ActividadesPage: React.FC = () => {
   // 🟢 VISTA DE DETALLE IDÉNTICA A FIGMA
   if (vistaDetalle) {
     const badgeObj = ESTADO_BADGES[vistaDetalle.status] || ESTADO_BADGES['PENDING'];
-    const nombreProyecto = proyectosDisponibles.find(p => p.id === vistaDetalle.projectId)?.name || 'ClassBoard Equipo A';
+    const nombreProyecto = proyectosDisponibles.find(p => p.id === vistaDetalle.projectId)?.name || 'Sin proyecto asignado';
     const comentariosVisibles = comentarios.filter(c => !c.content.startsWith('__EVALUACION_JSON__:'));
 
     return (
@@ -472,7 +485,7 @@ export const ActividadesPage: React.FC = () => {
               <h1 className="text-xl font-bold text-gray-900 tracking-tight">{vistaDetalle.name}</h1>
               <p className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
                 <Folder size={12} className="text-blue-500" />
-                Proyecto: <strong className="text-gray-700">{nombreProyecto}</strong>
+                {nombreEstudiante} · <strong className="text-gray-700">{nombreProyecto}</strong>
               </p>
             </div>
           </div>
@@ -681,8 +694,8 @@ export const ActividadesPage: React.FC = () => {
             <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-3 text-xs">
               <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Información</h3>
               <div className="flex justify-between text-gray-500">
-                <span>Proyecto</span>
-                <span className="font-bold text-blue-600">{nombreProyecto}</span>
+                <span>Estudiante</span>
+                <span className="font-bold text-blue-600">{nombreEstudiante}</span>
               </div>
               <div className="flex justify-between text-gray-500">
                 <span>Creada el</span>
@@ -717,7 +730,7 @@ export const ActividadesPage: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Actividades</h1>
-          <p className="text-xs text-gray-400 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
+          <p className="text-xs text-gray-400 font-medium mt-0.5">{nombreEstudiante}</p>
         </div>
         <button 
           onClick={() => {

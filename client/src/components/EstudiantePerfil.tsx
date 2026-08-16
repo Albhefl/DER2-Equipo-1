@@ -4,10 +4,10 @@ import {
   Upload, ListChecks, CheckCircle2, Package, FolderOpen, Edit2
 } from 'lucide-react';
 
-import { API_BASE_URL } from '../config/apis';   // ← agregar esta línea
+import { API_BASE_URL } from '../config/api';
 
-const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;   // ← cambiar esta línea
-const API_PROYECTOS_URL = `${API_BASE_URL}/proyectos`;  
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
+const API_PROYECTOS_URL = `${API_BASE_URL}/proyectos`;
 
 type ProfileData = {
   id?: string;
@@ -55,8 +55,8 @@ export const EstudiantePerfil: React.FC = () => {
   const [totalProyectos, setTotalProyectos] = useState(0);
 
   const [profile, setProfile] = useState<ProfileData>({
-    name: "Ana García Pérez",
-    email: "ana.garcia@universidad.edu",
+    name: "Estudiante",
+    email: "",
     role: "Estudiante",
     university: "Universidad Nacional Autónoma",
     phone: "+52 55 1234 5678",
@@ -67,17 +67,21 @@ export const EstudiantePerfil: React.FC = () => {
 
   const [draft, setDraft] = useState<ProfileData>(profile);
 
-  // Cargar perfil guardado localmente o de la API (idéntico al archivo anterior)
+  // 🟢 Carga el perfil SOLO desde la llave "user" (la única que escribe Login.tsx).
+  // Antes también se leía una llave vieja "usuario" (en español) que quedaba
+  // cacheada de versiones anteriores del proyecto y siempre tenía prioridad,
+  // por eso el perfil mostraba datos de otra cuenta sin importar quién iniciara
+  // sesión. Se elimina ese fallback para que esto no vuelva a pasar.
   useEffect(() => {
     const cargarUsuario = () => {
       try {
-        const storedUser = localStorage.getItem("usuario") || localStorage.getItem("user");
+        const storedUser = localStorage.getItem("user");
         if (storedUser) {
           const u = JSON.parse(storedUser);
           const datos = {
             id: u.id || "",
-            name: u.name || u.nombre || u.fullName || "Ana García Pérez",
-            email: u.email || u.correo || "ana.garcia@universidad.edu",
+            name: u.name || u.nombre || u.fullName || "Estudiante",
+            email: u.email || u.correo || "",
             role: "Estudiante",
             university: u.university || u.escuela || "Universidad Nacional Autónoma",
             phone: u.phone || u.telefono || "+52 55 1234 5678",
@@ -128,17 +132,17 @@ export const EstudiantePerfil: React.FC = () => {
     setDraft(d => ({ ...d, [k]: e.target.value }));
   };
 
-  // Guardar cambios (idéntico al archivo anterior -- sigue persistiendo solo
-  // en localStorage, porque todavía no existe un PUT /api/usuarios/:id real;
-  // eso sería otra HU aparte)
+  // 🟢 Guardar cambios: sigue persistiendo solo en localStorage (todavía no existe
+  // un PUT /api/usuarios/:id real; eso sería otra HU aparte). Ahora solo escribe
+  // en la llave "user" -- ya no se duplica hacia "usuario" para evitar volver a
+  // generar la misma inconsistencia que causaba el bug.
   const handleGuardarCambios = () => {
     setSaving(true);
     try {
-      const storedUser = localStorage.getItem("usuario") || localStorage.getItem("user");
+      const storedUser = localStorage.getItem("user");
       const currentObj = storedUser ? JSON.parse(storedUser) : {};
       const updatedObj = { ...currentObj, ...draft };
 
-      localStorage.setItem("usuario", JSON.stringify(updatedObj));
       localStorage.setItem("user", JSON.stringify(updatedObj));
     } catch (e) {
       console.error(e);

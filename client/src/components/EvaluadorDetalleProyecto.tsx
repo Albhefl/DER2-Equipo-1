@@ -7,7 +7,7 @@ import {
   Circle,
   FolderOpen
 } from 'lucide-react';
-import { API_BASE_URL } from '../config/apis';
+import { API_BASE_URL } from '../config/api';
 
 interface Miembro {
   id: string;

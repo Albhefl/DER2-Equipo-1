@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { Search, Clock, ArrowLeft, FolderOpen } from 'lucide-react';
-import { API_BASE_URL } from '../config/apis';
+import { API_BASE_URL } from '../config/api';
 
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 const API_PROYECTOS_URL = `${API_BASE_URL}/actividades/proyectos`;

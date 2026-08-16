@@ -10,7 +10,7 @@ import {
 import { ProgressBar } from './ProgressBar';
 import { GraficoActividadesResponsables } from './GraficoActividadesResponsables';
 
-import { API_BASE_URL } from '../config/apis';
+import { API_BASE_URL } from '../config/api';
 
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;

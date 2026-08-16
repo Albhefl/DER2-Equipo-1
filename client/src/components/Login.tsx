@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useNavigate, Link } from 'react-router-dom';
-import { API_BASE_URL } from '../config/apis'; 
+import { API_BASE_URL } from '../config/api'; 
+
 /**
  * 1. ESQUEMA DE VALIDACIÓN CON ZOD (HU-009.1)
  */
@@ -179,11 +180,11 @@ export const Login: React.FC = () => {
             {isSubmitting ? 'Iniciando sesión...' : 'Iniciar sesión'}
           </button>
 
-          {/* SOPORTE DE CUENTA */}
+          {/* SOPORTE DE CUENTA (CORREGIDO) */}
           <div className="text-center pt-1">
-            <a href="#" className="text-[16px] font-regular text-[#111827] hover:underline">
+            <Link to="/recuperar-password" className="text-[16px] font-regular text-[#111827] hover:underline">
               ¿Olvidaste tu contraseña?
-            </a>
+            </Link>
           </div>
 
           {/* DIVISOR INTERMEDIO */}

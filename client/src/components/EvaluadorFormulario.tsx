@@ -4,7 +4,7 @@ import {
   ArrowLeft, ShieldCheck, CheckCircle2, FileText, ExternalLink, Paperclip 
 } from 'lucide-react';
 
-import { API_BASE_URL, SERVER_URL } from '../config/apis';
+import { API_BASE_URL, SERVER_URL } from '../config/api';
 
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 
