@@ -8,26 +8,17 @@ import { fileURLToPath } from 'url';
 
 const router = Router();
 
-// ---------------------------------------------------------------------------
-// TIPO EXTENDIDO: AuthRequest no incluye 'file' (lo agrega multer en runtime).
-// En vez de modificar middleware/auth.ts, extendemos el tipo aquí mismo.
-// ---------------------------------------------------------------------------
 type AuthRequestConArchivo = AuthRequest & { file?: Express.Multer.File };
 
-// ---------------------------------------------------------------------------
-// CONFIGURACIÓN DE SUBIDA DE ARCHIVOS (multer)
-// ---------------------------------------------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Carpeta donde se guardan físicamente los archivos subidos
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadsDir),
   filename: (_req, file, cb) => {
-    // Nombre único para evitar colisiones/sobrescrituras entre usuarios
     const nombreUnico = `${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`;
     cb(null, nombreUnico);
   }
@@ -35,7 +26,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB máx por archivo
+  limits: { fileSize: 15 * 1024 * 1024 },
   fileFilter: (_req, file, cb: FileFilterCallback) => {
     const permitidos = /\.(pdf|docx?|png|jpe?g|zip)$/i;
     if (!permitidos.test(file.originalname)) {
@@ -45,16 +36,12 @@ const upload = multer({
   }
 });
 
-// Incluye asignados y la información básica del Proyecto al que pertenece la actividad
 const INCLUDE_RELATIONS = {
   assignees: { include: { user: { select: { id: true, name: true } } } },
   project: { select: { id: true, name: true } },
   evidence: true,
 };
 
-/**
- * Mapea estados de Prisma (PENDING, IN_PROCESS, IN_REVIEW, DONE) a Figma y viceversa
- */
 function mapStatusToClient(status: string): string {
   switch (status) {
     case 'IN_PROCESS': return 'En Proceso';
@@ -229,9 +216,45 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
 });
 
 /**
+ * DELETE /api/actividades/proyectos/:id
+ * Ruta de borrado agregada para solucionar el error 404 / cannot DELETE
+ */
+router.delete('/proyectos/:id', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  const { id } = req.params;
+  const usuario_id = req.user?.userId;
+
+  if (!id) return res.status(400).json({ message: 'ID de proyecto requerido.' });
+  if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
+  try {
+    const proyectoExistente = await db.project.findFirst({
+      where: { id: id as string },
+    });
+
+    if (!proyectoExistente) return res.status(404).json({ message: 'Proyecto no encontrado.' });
+
+    // Limpiamos relaciones previas
+    await db.projectMember.deleteMany({ where: { projectId: id as string } });
+    await db.projectEvaluator.deleteMany({ where: { projectId: id as string } });
+    
+    // Desvinculamos actividades asociadas para evitar conflictos de llave foránea
+    await db.activity.updateMany({
+      where: { projectId: id as string },
+      data: { projectId: null }
+    });
+
+    // Eliminamos el proyecto
+    await db.project.delete({ where: { id: id as string } });
+
+    return res.status(200).json({ message: 'Proyecto eliminado exitosamente.' });
+  } catch (error) {
+    console.error('Error al eliminar proyecto:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
+/**
  * GET /api/actividades
- * Obtiene TODAS las actividades de los proyectos a los que pertenece el usuario
- * (Permite que los líderes e integrantes vean los avances de todo el equipo en Kanban)
  */
 router.get('/', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const usuario_id = req.user?.userId;
@@ -264,7 +287,6 @@ router.get('/', verificarToken, async (req: AuthRequest, res: Response): Promise
 
 /**
  * POST /api/actividades
- * Crea una actividad asignando al responsable seleccionado y al proyecto
  */
 router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { nombre, descripcion, fecha_limite, prioridad, estado, projectId, responsableId } = req.body;
@@ -287,8 +309,6 @@ router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promis
 
     const prioridadUpper = prioridad ? String(prioridad).toUpperCase() : 'MED';
     const estadoUpper = estado ? mapStatusToPrisma(estado) : 'PENDING';
-
-    // Asigna al responsable seleccionado o al usuario creador por defecto
     const usuarioAsignado = responsableId || usuario_id;
 
     const actividad = await db.activity.create({
@@ -337,9 +357,6 @@ router.get('/:id', verificarToken, async (req: AuthRequest, res: Response): Prom
   }
 });
 
-/**
- * POST /api/actividades/:id/responsables
- */
 router.post('/:id/responsables', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const { userId } = req.body;
@@ -379,10 +396,6 @@ router.post('/:id/responsables', verificarToken, async (req: AuthRequest, res: R
   }
 });
 
-/**
- * PUT /api/actividades/:id
- * Actualiza la actividad y reasigna el responsable si cambió
- */
 router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const { nombre, descripcion, fecha_limite, estado, prioridad, projectId, responsableId } = req.body;
@@ -410,7 +423,6 @@ router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Prom
     const estadoUpper = estado ? mapStatusToPrisma(estado) : actividadExistente.status;
     const prioridadUpper = prioridad ? String(prioridad).toUpperCase() : actividadExistente.priority;
 
-    // Si se envió un responsableId en la edición, actualizamos la tabla pivote
     if (responsableId) {
       await db.activityAssignee.deleteMany({ where: { activityId: id as string } });
       await db.activityAssignee.create({ data: { activityId: id as string, userId: responsableId } });
@@ -436,9 +448,6 @@ router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Prom
   }
 });
 
-/**
- * DELETE /api/actividades/:id
- */
 router.delete('/:id', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const usuario_id = req.user?.userId;
@@ -461,9 +470,6 @@ router.delete('/:id', verificarToken, async (req: AuthRequest, res: Response): P
   }
 });
 
-/**
- * COMENTARIOS
- */
 router.get('/:id/comentarios', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const usuario_id = req.user?.userId;
@@ -509,9 +515,6 @@ router.post('/:id/comentarios', verificarToken, async (req: AuthRequest, res: Re
   }
 });
 
-/**
- * EVIDENCIAS
- */
 router.get('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const usuario_id = req.user?.userId;
@@ -532,10 +535,6 @@ router.get('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Resp
   }
 });
 
-/**
- * POST /api/actividades/:id/evidencias
- * Registra una evidencia por URL/enlace externo (Figma, Drive, Gemini, etc.)
- */
 router.post('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const { url } = req.body;
@@ -561,11 +560,6 @@ router.post('/:id/evidencias', verificarToken, async (req: AuthRequest, res: Res
   }
 });
 
-/**
- * POST /api/actividades/:id/evidencias/upload
- * Sube un ARCHIVO REAL (PDF, DOCX, PNG, ZIP) y crea el registro de evidencia
- * apuntando al nombre físico guardado en disco.
- */
 router.post(
   '/:id/evidencias/upload',
   verificarToken,
@@ -581,7 +575,7 @@ router.post(
     try {
       const evidencia = await db.evidence.create({
         data: {
-          url: req.file.filename, // nombre único real guardado en /uploads
+          url: req.file.filename,
           activityId: id as string,
           createdBy: usuario_id,
         },
@@ -596,10 +590,6 @@ router.post(
   }
 );
 
-/**
- * DELETE /api/actividades/comentarios/:id
- * Elimina un comentario por su ID verificando que el usuario esté autenticado
- */
 router.delete('/comentarios/:id', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const usuario_id = req.user?.userId;
@@ -616,7 +606,6 @@ router.delete('/comentarios/:id', verificarToken, async (req: AuthRequest, res: 
       return res.status(404).json({ message: 'Comentario no encontrado.' });
     }
 
-    // Opcional de seguridad: verificar que solo el autor pueda borrarlo
     if (comentarioExistente.authorId !== usuario_id) {
       return res.status(403).json({ message: 'No tienes permiso para eliminar este comentario.' });
     }
@@ -631,17 +620,11 @@ router.delete('/comentarios/:id', verificarToken, async (req: AuthRequest, res: 
     return res.status(500).json({ message: 'Error interno en el servidor.' });
   }
 });
-/**
- * DELETE /api/actividades/evidencias/:evidenciaId
- * Elimina el registro de evidencia y, si es un archivo local, también el archivo físico en disco.
- */
+
 router.delete('/evidencias/:evidenciaId', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { evidenciaId } = req.params;
   const usuario_id = req.user?.userId;
 
-  // Este guard, además de validar, hace que TS reduzca el tipo de
-  // evidenciaId de "string | undefined" a "string" en el resto de la función
-  // (necesario porque el tsconfig tiene noUncheckedIndexedAccess activado).
   if (!evidenciaId) return res.status(400).json({ message: 'ID de evidencia requerido.' });
   if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
 
@@ -649,7 +632,6 @@ router.delete('/evidencias/:evidenciaId', verificarToken, async (req: AuthReques
     const evidencia = await db.evidence.findUnique({ where: { id: evidenciaId } });
     if (!evidencia) return res.status(404).json({ message: 'Evidencia no encontrada.' });
 
-    // Si no es un link externo (http/https), intenta borrar también el archivo físico
     if (!evidencia.url.startsWith('http')) {
       const filePath = path.join(uploadsDir, evidencia.url);
       fs.unlink(filePath, (err) => {
@@ -665,10 +647,6 @@ router.delete('/evidencias/:evidenciaId', verificarToken, async (req: AuthReques
   }
 });
 
-/**
- * GET /api/actividades/:id/evaluacion
- * Consulta la evaluación de una actividad (si existe), separada de los comentarios.
- */
 router.get('/:id/evaluacion', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const usuario_id = req.user?.userId;
@@ -689,12 +667,6 @@ router.get('/:id/evaluacion', verificarToken, async (req: AuthRequest, res: Resp
   }
 });
 
-/**
- * POST /api/actividades/:id/evaluar
- * Guarda/actualiza la calificación y rúbrica en el modelo Evaluation (no en Comment)
- * y cambia el estado de la actividad a DONE. Usa upsert para que una re-evaluación
- * actualice el registro existente en vez de crear uno nuevo.
- */
 router.post('/:id/evaluar', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const { score, criterios, comentario, status } = req.body;
@@ -712,7 +684,6 @@ router.post('/:id/evaluar', verificarToken, async (req: AuthRequest, res: Respon
       return res.status(404).json({ message: 'Actividad no encontrada.' });
     }
 
-    // Actualizamos el estado de la actividad
     const actividadActualizada = await db.activity.update({
       where: { id: id as string },
       data: {
@@ -721,7 +692,6 @@ router.post('/:id/evaluar', verificarToken, async (req: AuthRequest, res: Respon
       include: INCLUDE_RELATIONS,
     });
 
-    // Guarda o actualiza la evaluación (una sola por actividad, gracias a @@unique([activityId]))
     const evaluacion = await db.evaluation.upsert({
       where: { activityId: id as string },
       update: {

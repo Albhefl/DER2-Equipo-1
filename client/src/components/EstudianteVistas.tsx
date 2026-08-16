@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Search, Plus, Edit2, Clock, CheckCircle2, AlertCircle, 
   Eye, CheckSquare, ArrowLeft, Send, FileText, Paperclip, Folder, Circle, Upload, Trash2
@@ -127,6 +128,9 @@ function getUserNameFromStorage() {
 }
 
 export const ActividadesPage: React.FC = () => {
+  // 🟢 NUEVO: leemos los query params de la URL (?id=... y/o ?projectId=...)
+  const [searchParams] = useSearchParams();
+
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [usuariosDisponibles, setUsuariosDisponibles] = useState<Miembro[]>([]);
   const [proyectosDisponibles, setProyectosDisponibles] = useState<ProyectoSimple[]>([]);
@@ -215,6 +219,29 @@ export const ActividadesPage: React.FC = () => {
     fetchActividades();
     fetchUsuariosYProyectos();
   }, []);
+
+  // 🟢 NUEVO: si llegamos desde otra pantalla con ?id=xxxx en la URL,
+  // abrimos automáticamente el detalle de esa actividad en cuanto
+  // termine de cargar el listado.
+  useEffect(() => {
+    const idDesdeUrl = searchParams.get('id');
+    if (idDesdeUrl && actividades.length > 0) {
+      const encontrada = actividades.find(a => a.id === idDesdeUrl);
+      if (encontrada) {
+        setVistaDetalle(encontrada);
+        setActividadSeleccionada(encontrada);
+      }
+    }
+  }, [searchParams, actividades]);
+
+  // 🟢 NUEVO: si llegamos con ?projectId=xxxx (ej. botón "Ver todas" de Proyectos),
+  // dejamos solo visibles las actividades de ese proyecto en el listado.
+  useEffect(() => {
+    const projectIdDesdeUrl = searchParams.get('projectId');
+    if (projectIdDesdeUrl) {
+      setSearch(''); // limpiamos búsqueda de texto para no ocultar resultados
+    }
+  }, [searchParams]);
 
   const fetchEvidenciasDeActividad = async (actividadId: string) => {
     try {
@@ -440,6 +467,9 @@ export const ActividadesPage: React.FC = () => {
     }
   };
 
+  // 🟢 NUEVO: si viene projectId en la URL, filtramos también por proyecto
+  const projectIdDesdeUrl = searchParams.get('projectId');
+
   const actividadesFiltradas = actividades.filter(a => {
     const estadoPrisma = mapStatusToPrisma(a.status);
     const coincideEstado = filterStatus === 'Todos' || 
@@ -449,7 +479,9 @@ export const ActividadesPage: React.FC = () => {
       (filterStatus === 'DONE' && estadoPrisma === 'DONE');
     
     const coincideBusqueda = a.name.toLowerCase().includes(search.toLowerCase());
-    return coincideEstado && coincideBusqueda;
+    const coincideProyecto = !projectIdDesdeUrl || a.projectId === projectIdDesdeUrl;
+
+    return coincideEstado && coincideBusqueda && coincideProyecto;
   });
 
   const counts = {

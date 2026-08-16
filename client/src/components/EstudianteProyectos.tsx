@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Plus, Search, FolderOpen, Edit2, ArrowLeft,
-  CheckCircle2, AlertCircle, Eye, CheckSquare 
+  CheckCircle2, AlertCircle, Eye, CheckSquare, Trash2, X 
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 
@@ -42,13 +42,21 @@ function formatearFechaParaInput(fechaRaw?: string) {
 function formatearFechaVista(fechaRaw?: string) {
   if (!fechaRaw) return '30/06/2026';
   const d = new Date(fechaRaw);
-  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+  return `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth() + 1).toString().padStart(2, '0')}/${d.getUTCFullYear()}`;
 }
 
 interface UsuarioSimple {
   id: string;
   name: string;
   email: string;
+}
+
+interface ActividadSimple {
+  id: string;
+  name: string;
+  status: string;
+  priority: string;
+  deadline?: string;
 }
 
 interface Proyecto {
@@ -62,6 +70,7 @@ interface Proyecto {
   progress?: number;
   members: UsuarioSimple[];
   evaluators: UsuarioSimple[];
+  activities?: ActividadSimple[];
 }
 
 export const EstudianteProyectos: React.FC = () => {
@@ -70,12 +79,23 @@ export const EstudianteProyectos: React.FC = () => {
   const [proyectos, setProyectos] = useState<Proyecto[]>([]);
   const [estudiantesDisponibles, setEstudiantesDisponibles] = useState<UsuarioSimple[]>([]);
   const [profesoresDisponibles, setProfesoresDisponibles] = useState<UsuarioSimple[]>([]);
-  const [selectedProyecto, setSelectedProyecto] = useState<Proyecto | null>(null);
   
+  const [selectedProyecto, setSelectedProyecto] = useState<Proyecto | null>(null);
+  const [actividadesProyecto, setActividadesProyecto] = useState<ActividadSimple[]>([]);
+  const [cargandoActividades, setCargandoActividades] = useState(false);
+  
+  const [confirmarEliminacion, setConfirmarEliminacion] = useState(false);
+
   const [modo, setModo] = useState<'lista' | 'crear' | 'editar'>('lista');
   const [cargandoProyectos, setCargandoProyectos] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
+
+  const [backendError, setBackendError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const [integranteEmail, setIntegranteEmail] = useState('');
+  const [evaluadorEmail, setEvaluadorEmail] = useState('');
 
   const [formProyecto, setFormProyecto] = useState<Proyecto>({
     name: '',
@@ -88,8 +108,6 @@ export const EstudianteProyectos: React.FC = () => {
     evaluators: []
   });
 
-  const [integranteSeleccionadoId, setIntegranteSeleccionadoId] = useState('');
-
   const obtenerProyectos = async () => {
     setCargandoProyectos(true);
     try {
@@ -101,7 +119,6 @@ export const EstudianteProyectos: React.FC = () => {
         const data = await res.json();
         const lista: Proyecto[] = data.proyectos || [];
         setProyectos(lista);
-        if (lista.length > 0) setSelectedProyecto(lista[0]);
       }
     } catch (err) {
       console.error('Error al obtener proyectos:', err);
@@ -136,7 +153,36 @@ export const EstudianteProyectos: React.FC = () => {
     cargarUsuarios();
   }, []);
 
+  const seleccionarProyectoYCargarActividades = async (p: Proyecto) => {
+    setSelectedProyecto(p);
+    setConfirmarEliminacion(false);
+    setCargandoActividades(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/actividades`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const todasActividades = data.actividades || data || [];
+        const delProyecto = todasActividades.filter((act: any) => 
+          act.projectId === p.id || act.proyectoId === p.id || (act.project && act.project.id === p.id)
+        );
+        setActividadesProyecto(delProyecto);
+      }
+    } catch (err) {
+      console.error('Error al cargar actividades del proyecto:', err);
+    } finally {
+      setCargandoActividades(false);
+    }
+  };
+
   const abrirEditar = (p: Proyecto) => {
+    setBackendError(null);
+    setSuccessMessage(null);
+    setIntegranteEmail('');
+    setEvaluadorEmail('');
     setFormProyecto({
       ...p,
       startDate: formatearFechaParaInput(p.startDate),
@@ -147,13 +193,60 @@ export const EstudianteProyectos: React.FC = () => {
     setModo('editar');
   };
 
-  const agregarIntegrante = () => {
-    if (!integranteSeleccionadoId) return;
-    const est = estudiantesDisponibles.find(u => u.id === integranteSeleccionadoId);
-    if (est && !formProyecto.members.some(m => m.id === est.id)) {
-      setFormProyecto(prev => ({ ...prev, members: [...prev.members, est] }));
+  const eliminarProyecto = async (id?: string) => {
+    if (!id) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE_URL}/actividades/proyectos/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (res.ok) {
+        setConfirmarEliminacion(false);
+        setSelectedProyecto(null);
+        obtenerProyectos();
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(errData.message || 'No se pudo eliminar el proyecto.');
+      }
+    } catch (err) {
+      console.error('Error al eliminar proyecto:', err);
+      alert('Error de conexión al intentar eliminar el proyecto.');
     }
-    setIntegranteSeleccionadoId('');
+  };
+
+  const agregarIntegrantePorCorreo = () => {
+    setBackendError(null);
+    if (!integranteEmail.trim()) return;
+
+    const emailBuscado = integranteEmail.toLowerCase().trim();
+    const estudianteEncontrado = estudiantesDisponibles.find(u => u.email.toLowerCase() === emailBuscado);
+
+    if (estudianteEncontrado) {
+      if (!formProyecto.members.some(m => m.id === estudianteEncontrado.id)) {
+        setFormProyecto(prev => ({ ...prev, members: [...prev.members, estudianteEncontrado] }));
+      }
+      setIntegranteEmail('');
+    } else {
+      setBackendError(`No se encontró ningún estudiante registrado con el correo: ${emailBuscado}`);
+    }
+  };
+
+  const asignarEvaluadorPorCorreo = () => {
+    setBackendError(null);
+    if (!evaluadorEmail.trim()) return;
+
+    const emailBuscado = evaluadorEmail.toLowerCase().trim();
+    const profesorEncontrado = profesoresDisponibles.find(p => p.email.toLowerCase() === emailBuscado);
+
+    if (profesorEncontrado) {
+      setFormProyecto(prev => ({ ...prev, evaluators: [profesorEncontrado] }));
+      setEvaluadorEmail('');
+    } else {
+      setBackendError(`No se encontró ningún evaluador registrado con el correo: ${emailBuscado}`);
+    }
   };
 
   const quitarIntegrante = (id: string) => {
@@ -166,23 +259,30 @@ export const EstudianteProyectos: React.FC = () => {
 
   const guardarProyecto = async (e: React.FormEvent) => {
     e.preventDefault();
+    setBackendError(null);
+    setSuccessMessage(null);
 
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    const nombreTrim = formProyecto.name.trim();
 
-    if (modo === 'crear' && formProyecto.startDate) {
-      const inicio = new Date(formProyecto.startDate);
-      if (inicio < hoy) {
-        alert('La fecha de inicio no puede ser anterior a hoy.');
-        return;
-      }
+    const yaExiste = proyectos.some(
+      p => p.name.toLowerCase() === nombreTrim.toLowerCase() && p.id !== formProyecto.id
+    );
+
+    if (yaExiste) {
+      setBackendError(`Ya existe un proyecto registrado con el nombre "${nombreTrim}". Por favor usa uno diferente.`);
+      return;
     }
 
-    if (formProyecto.startDate && formProyecto.endDate) {
-      const inicio = new Date(formProyecto.startDate);
-      const cierre = new Date(formProyecto.endDate);
-      if (cierre < inicio) {
-        alert('La fecha de cierre no puede ser anterior a la fecha de inicio.');
+    const payload = { ...formProyecto, name: nombreTrim };
+
+    if (!payload.startDate) {
+      const hoy = new Date();
+      payload.startDate = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+    }
+
+    if (payload.startDate && payload.endDate) {
+      if (payload.endDate < payload.startDate) {
+        setBackendError('La fecha de cierre no puede ser anterior a la fecha de inicio.');
         return;
       }
     }
@@ -192,19 +292,23 @@ export const EstudianteProyectos: React.FC = () => {
       const res = await fetch(`${API_BASE_URL}/actividades/proyectos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(formProyecto)
+        body: JSON.stringify(payload)
       });
 
       if (res.ok) {
-        alert('¡Proyecto guardado exitosamente!');
-        setModo('lista');
-        obtenerProyectos();
+        setSuccessMessage('¡Proyecto guardado exitosamente!');
+        setTimeout(() => {
+          setModo('lista');
+          obtenerProyectos();
+          setSuccessMessage(null);
+        }, 1500);
       } else {
         const errData = await res.json();
-        alert(errData.message || 'Error al guardar el proyecto.');
+        setBackendError(errData.message || 'Error al guardar el proyecto.');
       }
     } catch (err) {
       console.error('Error al guardar proyecto:', err);
+      setBackendError('Error de conexión con el servidor.');
     }
   };
 
@@ -224,7 +328,7 @@ export const EstudianteProyectos: React.FC = () => {
 
   if (modo === 'crear' || modo === 'editar') {
     return (
-      <div className="p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border">
+      <div className="p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border max-w-4xl mx-auto">
         <div className="flex items-center gap-3">
           <button onClick={() => setModo('lista')} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer">
             <ArrowLeft size={20} />
@@ -237,6 +341,18 @@ export const EstudianteProyectos: React.FC = () => {
           </div>
         </div>
 
+        {backendError && (
+          <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl font-medium flex items-center gap-2">
+            <AlertCircle size={16} /> {backendError}
+          </div>
+        )}
+        
+        {successMessage && (
+          <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm p-3 rounded-xl font-medium flex items-center gap-2 animate-pulse">
+            <CheckCircle2 size={16} /> {successMessage}
+          </div>
+        )}
+
         <form onSubmit={guardarProyecto} className="space-y-6">
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Información del proyecto</h3>
@@ -247,6 +363,7 @@ export const EstudianteProyectos: React.FC = () => {
                 <input 
                   type="text" 
                   required
+                  disabled={!!successMessage}
                   value={formProyecto.name}
                   onChange={e => setFormProyecto({ ...formProyecto, name: e.target.value })}
                   className="w-full p-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300 transition"
@@ -258,37 +375,28 @@ export const EstudianteProyectos: React.FC = () => {
                 <textarea 
                   rows={3}
                   required
+                  disabled={!!successMessage}
                   value={formProyecto.description}
                   onChange={e => setFormProyecto({ ...formProyecto, description: e.target.value })}
                   className="w-full p-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300 transition resize-none"
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de inicio</label>
-                  <input 
-                    type="date" 
-                    value={formProyecto.startDate || ''}
-                    onChange={e => setFormProyecto({ ...formProyecto, startDate: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300 transition"
-                  />
-                </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Fecha de cierre</label>
                   <input 
                     type="date" 
+                    disabled={!!successMessage}
                     value={formProyecto.endDate || ''}
                     onChange={e => setFormProyecto({ ...formProyecto, endDate: e.target.value })}
                     className="w-full p-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300 transition"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Prioridad</label>
                   <select 
+                    disabled={!!successMessage}
                     value={formProyecto.priority || 'Alta'}
                     onChange={e => setFormProyecto({ ...formProyecto, priority: e.target.value })}
                     className="w-full p-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300 transition"
@@ -301,6 +409,7 @@ export const EstudianteProyectos: React.FC = () => {
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Estado</label>
                   <select 
+                    disabled={!!successMessage}
                     value={formProyecto.status || 'Activo'}
                     onChange={e => setFormProyecto({ ...formProyecto, status: e.target.value })}
                     className="w-full p-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300 transition"
@@ -316,30 +425,36 @@ export const EstudianteProyectos: React.FC = () => {
           </div>
 
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Integrantes del proyecto</h3>
-              <div className="flex gap-2">
-                <select 
-                  value={integranteSeleccionadoId}
-                  onChange={e => setIntegranteSeleccionadoId(e.target.value)}
-                  className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none min-w-[200px]"
-                >
-                  <option value="">-- Selecciona Integrante --</option>
-                  {estudiantesDisponibles.map(e => (
-                    <option key={e.id} value={e.id}>{e.name} ({e.email})</option>
-                  ))}
-                </select>
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
+              <div>
+                <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-1">Integrantes del proyecto</h3>
+                <p className="text-[11px] text-gray-400">Invita a tus compañeros usando su correo electrónico.</p>
+              </div>
+              
+              <div className="flex gap-2 w-full sm:w-auto">
+                <input 
+                  type="email"
+                  name="integrante_email_custom"
+                  id="integrante_email_custom"
+                  autoComplete="off"
+                  placeholder="correo@estudiante.com"
+                  disabled={!!successMessage}
+                  value={integranteEmail}
+                  onChange={e => setIntegranteEmail(e.target.value)}
+                  className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none flex-1 sm:min-w-[220px]"
+                />
                 <button 
                   type="button"
-                  onClick={agregarIntegrante}
+                  disabled={!!successMessage}
+                  onClick={agregarIntegrantePorCorreo}
                   className="px-3 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 flex items-center gap-1 transition cursor-pointer"
                 >
-                  <Plus size={14} /> Agregar integrante
+                  <Plus size={14} /> Agregar
                 </button>
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 mt-4">
               <div className="grid grid-cols-12 text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">
                 <div className="col-span-6">Integrante</div>
                 <div className="col-span-5">Correo electrónico</div>
@@ -355,7 +470,7 @@ export const EstudianteProyectos: React.FC = () => {
                     <input readOnly value={m.email} className="w-full p-2.5 bg-gray-50/70 border border-gray-100 rounded-xl text-xs font-medium text-gray-500" />
                   </div>
                   <div className="col-span-1 text-right">
-                    <button type="button" onClick={() => quitarIntegrante(m.id)} className="text-red-500 hover:text-red-700 text-xs font-bold cursor-pointer">
+                    <button type="button" disabled={!!successMessage} onClick={() => quitarIntegrante(m.id)} className="text-red-500 hover:text-red-700 text-xs font-bold cursor-pointer">
                       Eliminar
                     </button>
                   </div>
@@ -371,31 +486,47 @@ export const EstudianteProyectos: React.FC = () => {
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Evaluador asignado</h3>
 
-            <div>
-              <label className="block text-xs font-bold text-gray-700 mb-1">Selecciona un evaluador *</label>
-              <select
-                value={formProyecto.evaluators[0]?.id || ''}
-                onChange={e => {
-                  const prof = profesoresDisponibles.find(p => p.id === e.target.value);
-                  setFormProyecto(prev => ({ ...prev, evaluators: prof ? [prof] : [] }));
-                }}
-                className="w-full p-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300 transition"
-              >
-                <option value="">-- Selecciona un evaluador --</option>
-                {profesoresDisponibles.map(p => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.email})</option>
-                ))}
-              </select>
+            <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+               <div className="flex-1">
+                <label className="block text-xs font-bold text-gray-700 mb-1">Invitar evaluador por correo *</label>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    name="evaluador_email_custom"
+                    id="evaluador_email_custom"
+                    autoComplete="off"
+                    placeholder="correo@docente.com"
+                    disabled={!!successMessage || formProyecto.evaluators.length > 0}
+                    value={evaluadorEmail}
+                    onChange={e => setEvaluadorEmail(e.target.value)}
+                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={!!successMessage || formProyecto.evaluators.length > 0}
+                    onClick={asignarEvaluadorPorCorreo}
+                    className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 transition cursor-pointer disabled:opacity-50"
+                  >
+                    Asignar
+                  </button>
+                </div>
+              </div>
             </div>
 
             {formProyecto.evaluators[0] && (
-              <div className="flex items-center justify-between p-3 bg-gray-50/70 border border-gray-100 rounded-xl">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-gray-800 truncate">{formProyecto.evaluators[0].name}</p>
-                  <p className="text-[11px] text-gray-500 truncate">{formProyecto.evaluators[0].email}</p>
+              <div className="flex items-center justify-between p-3 mt-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
+                <div className="min-w-0 flex items-center gap-3">
+                  <div className="bg-emerald-100 p-2 rounded-lg">
+                    <CheckCircle2 size={16} className="text-emerald-600" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-gray-800 truncate">{formProyecto.evaluators[0].name}</p>
+                    <p className="text-[11px] text-gray-500 truncate">{formProyecto.evaluators[0].email}</p>
+                  </div>
                 </div>
                 <button
                   type="button"
+                  disabled={!!successMessage}
                   onClick={() => quitarEvaluador(formProyecto.evaluators[0].id)}
                   className="text-red-500 hover:text-red-700 text-xs font-bold cursor-pointer shrink-0 ml-3"
                 >
@@ -408,16 +539,18 @@ export const EstudianteProyectos: React.FC = () => {
           <div className="flex justify-end gap-3">
             <button 
               type="button" 
+              disabled={!!successMessage}
               onClick={() => setModo('lista')}
-              className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer"
+              className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer disabled:opacity-50"
             >
               Cancelar
             </button>
             <button 
               type="submit" 
-              className="px-5 py-2 text-xs font-bold text-white bg-black hover:bg-gray-900 rounded-xl shadow-xs transition cursor-pointer"
+              disabled={!!successMessage}
+              className="px-5 py-2 text-xs font-bold text-white bg-black hover:bg-gray-900 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
             >
-              Guardar cambios
+              {successMessage ? 'Guardando...' : 'Guardar cambios'}
             </button>
           </div>
         </form>
@@ -430,11 +563,14 @@ export const EstudianteProyectos: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Proyectos</h1>
-          <p className="text-xs text-gray-400 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
         </div>
         <button 
           onClick={() => {
-            setFormProyecto({ name: '', description: '', members: [], evaluators: [] });
+            setBackendError(null);
+            setSuccessMessage(null);
+            setIntegranteEmail('');
+            setEvaluadorEmail('');
+            setFormProyecto({ name: '', description: '', startDate: '', endDate: '', priority: 'Alta', status: 'Activo', members: [], evaluators: [] });
             setModo('crear');
           }}
           className="px-4 py-2.5 bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs hover:bg-gray-900 transition cursor-pointer"
@@ -476,7 +612,7 @@ export const EstudianteProyectos: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-5 items-start">
+      <div className="flex flex-col lg:flex-row gap-6 items-start">
         <div className="flex-1 w-full space-y-3">
           <h3 className="text-xs font-bold text-gray-900 mb-1">Lista de proyectos</h3>
 
@@ -492,10 +628,14 @@ export const EstudianteProyectos: React.FC = () => {
               return (
                 <div 
                   key={p.id} 
-                  onClick={() => setSelectedProyecto(p)}
-                  className={`bg-white p-5 rounded-2xl border transition cursor-pointer shadow-xs space-y-3.5 ${
-                    isSelected ? 'border-gray-300 ring-1 ring-gray-200' : 'border-gray-100 hover:border-gray-200'
+                  onClick={() => seleccionarProyectoYCargarActividades(p)}
+                  onDoubleClick={() => seleccionarProyectoYCargarActividades(p)}
+                  className={`bg-white p-5 rounded-2xl border transition cursor-pointer shadow-xs space-y-3.5 select-none ${
+                    isSelected 
+                      ? 'border-black ring-2 ring-black/10 shadow-md bg-slate-50/50' 
+                      : 'border-gray-100 hover:border-gray-300'
                   }`}
+                  title="Haz clic para ver el detalle rápido a la derecha"
                 >
                   <div className="flex justify-between items-start gap-3">
                     <div className="min-w-0 flex-1">
@@ -509,6 +649,19 @@ export const EstudianteProyectos: React.FC = () => {
 
                     <div className="flex items-center gap-2.5 shrink-0">
                       <Badge label={p.status || 'Activo'} />
+
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          seleccionarProyectoYCargarActividades(p);
+                        }}
+                        className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                          isSelected ? 'bg-black text-white' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                        }`}
+                      >
+                        <Eye size={13} /> {isSelected ? 'Seleccionado' : 'Ver detalle'}
+                      </button>
+
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
@@ -543,21 +696,26 @@ export const EstudianteProyectos: React.FC = () => {
         </div>
 
         {selectedProyecto && (
-          <div className="w-full lg:w-80 bg-white p-6 rounded-2xl border border-gray-100 shadow-xs shrink-0 space-y-5 lg:sticky lg:top-6">
-            <div>
-              <p className="text-xs font-bold text-gray-900 mb-1">DETALLE DEL PROYECTO</p>
-              <h3 className="font-bold text-gray-900 text-sm leading-snug">{selectedProyecto.name}</h3>
-              <p className="text-xs text-gray-400 mt-1 leading-relaxed">{selectedProyecto.description}</p>
+          <div className="w-full lg:w-[420px] bg-white p-6 md:p-7 rounded-3xl border border-gray-100 shadow-sm shrink-0 space-y-6 lg:sticky lg:top-6">
+            
+            <div className="flex justify-between items-start border-b border-gray-100 pb-4">
+              <div>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DETALLE RÁPIDO</span>
+                <h3 className="font-bold text-gray-900 text-base leading-snug mt-0.5">{selectedProyecto.name}</h3>
+                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{selectedProyecto.description}</p>
+              </div>
+              <button 
+                onClick={() => setSelectedProyecto(null)}
+                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <div className="space-y-3 text-xs border-t border-gray-50 pt-4">
+            <div className="space-y-3 text-xs bg-gray-50 p-4 rounded-2xl">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Estado</span>
                 <Badge label={selectedProyecto.status || 'Activo'} />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Fecha inicio</span>
-                <span className="font-bold text-gray-800">{formatearFechaVista(selectedProyecto.startDate)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Fecha límite</span>
@@ -565,7 +723,7 @@ export const EstudianteProyectos: React.FC = () => {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Docente asignado</span>
-                <span className="font-bold text-gray-800">
+                <span className="font-bold text-gray-800 truncate max-w-[200px]">
                   {selectedProyecto.evaluators?.[0]?.name || 'Sin asignar'}
                 </span>
               </div>
@@ -575,33 +733,42 @@ export const EstudianteProyectos: React.FC = () => {
               </div>
             </div>
 
-            <div className="pt-1 space-y-1.5 border-t border-gray-50 pt-4">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-gray-400">Progreso</span>
-                <span className="text-gray-900">{selectedProyecto.progress || 0}%</span>
+            <div className="border-t border-gray-100 pt-5 space-y-3">
+              <div className="flex justify-between items-center">
+                <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Actividades recientes</h4>
+                <button
+                  onClick={() => navigate(`/estudiante-actividades?projectId=${selectedProyecto.id}`)}
+                  className="text-[10px] font-bold text-gray-500 hover:text-black transition underline cursor-pointer"
+                >
+                  Ver todas
+                </button>
               </div>
-              <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
-                <div className="bg-black h-2 rounded-full transition-all duration-300" style={{ width: `${selectedProyecto.progress || 0}%` }} />
+
+              <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                {cargandoActividades ? (
+                  <p className="text-[11px] text-gray-400 italic text-center py-4">Cargando...</p>
+                ) : actividadesProyecto.length > 0 ? (
+                  actividadesProyecto.map(act => (
+                    <div 
+                      key={act.id} 
+                      onClick={() => navigate(`/estudiante-actividades?id=${act.id}`)}
+                      className="p-3.5 bg-white border border-gray-100 hover:border-gray-300 rounded-2xl text-xs shadow-xs flex justify-between items-center transition cursor-pointer group"
+                    >
+                      <span className="font-bold text-gray-800 group-hover:text-black truncate pr-2">{act.name}</span>
+                      <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 bg-gray-100 rounded-lg text-gray-700 shrink-0">
+                        {act.status}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-[11px] text-gray-400 italic text-center py-4 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                    No hay actividades registradas.
+                  </p>
+                )}
               </div>
             </div>
 
-            <div className="border-t border-gray-50 pt-4 space-y-2.5 text-xs">
-              <p className="text-xs font-bold text-gray-900">Próximas fechas</p>
-              <div className="flex justify-between text-gray-600 text-xs">
-                <span>Definir alcance</span>
-                <span className="font-bold text-gray-800">En 2 días</span>
-              </div>
-              <div className="flex justify-between text-gray-600 text-xs">
-                <span>Diseño de interfaz</span>
-                <span className="font-bold text-gray-800">En 5 días</span>
-              </div>
-              <div className="flex justify-between text-gray-600 text-xs">
-                <span>Revisión con equipo</span>
-                <span className="font-bold text-gray-800">En 9 días</span>
-              </div>
-            </div>
-
-            <div className="pt-3 space-y-2.5 border-t border-gray-50">
+            <div className="pt-3 space-y-2.5 border-t border-gray-100">
               <button 
                 onClick={() => {
                   if (selectedProyecto?.id) {
@@ -612,15 +779,26 @@ export const EstudianteProyectos: React.FC = () => {
                 }}
                 className="w-full py-2.5 bg-black text-white rounded-xl text-xs font-semibold hover:bg-gray-900 transition cursor-pointer shadow-xs"
               >
-                Ir al tablero
+                Ir al tablero Kanban
               </button>
-              <button 
-                onClick={() => abrirEditar(selectedProyecto)}
-                className="w-full py-2.5 bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200/60"
-              >
-                <Edit2 size={13} /> Editar proyecto
-              </button>
+              
+              <div className="flex gap-2">
+                <button 
+                  onClick={() => abrirEditar(selectedProyecto)}
+                  className="flex-1 py-2.5 bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200/60"
+                >
+                  <Edit2 size={13} /> Editar proyecto
+                </button>
+                <button 
+                  onClick={() => eliminarProyecto(selectedProyecto.id)}
+                  className="px-3.5 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-semibold hover:bg-red-100 transition flex items-center justify-center gap-1 cursor-pointer"
+                  title="Eliminar proyecto"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
             </div>
+
           </div>
         )}
       </div>
