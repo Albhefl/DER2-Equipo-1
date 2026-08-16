@@ -36,13 +36,13 @@ const CHART_COLORS = ["#94a3b8", "#3b82f6", "#f59e0b", "#22c55e"];
 
 function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs box-border">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+    <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs box-border min-w-0">
+      <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
         {icon}
       </div>
-      <div className="min-w-0">
-        <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{value}</p>
-        <p className="text-xs text-gray-400 font-medium truncate">{label}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{value}</p>
+        <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">{label}</p>
       </div>
     </div>
   );
@@ -132,28 +132,28 @@ export const EstudianteDashboard: React.FC = () => {
     });
 
   return (
-    <div className="w-full max-w-full space-y-6 box-border font-sans text-gray-900">
+    <div className="p-4 sm:p-6 w-full max-w-full space-y-6 box-border font-sans text-gray-900 overflow-x-hidden">
       {/* TÍTULO */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dashboard del Estudiante</h1>
-        <p className="text-sm text-gray-400 font-medium mt-0.5">
+        <h1 className="text-2xl font-bold text-gray-900 tracking-tight truncate">Dashboard del Estudiante</h1>
+        <p className="text-xs sm:text-sm text-gray-400 font-medium mt-0.5 truncate">
           {projectIdParam ? "Filtrado por proyecto seleccionado" : "Proyecto: ClassBoard Equipo A"}
         </p>
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-xs text-gray-400 font-medium">Cargando métricas en tiempo real...</div>
+        <div className="py-12 text-center text-xs text-gray-400 font-medium bg-white rounded-2xl border border-gray-100">Cargando métricas en tiempo real...</div>
       ) : error ? (
         <div className="py-6 text-center text-xs text-red-500 font-bold bg-red-50 rounded-2xl border border-red-100">{error}</div>
       ) : (
         <>
-          {/* MÉTRICAS / STAT CARDS */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">
-            <StatCard label="Total de actividades" value={totalActividades} color="bg-indigo-50 text-indigo-600" icon={<ListChecks size={20} />} />
-            <StatCard label="Pendientes" value={pendientes} color="bg-gray-50 text-gray-400" icon={<Clock size={20} />} />
-            <StatCard label="En proceso" value={enProceso} color="bg-blue-50 text-blue-600" icon={<AlertCircle size={20} />} />
-            <StatCard label="En revisión" value={enRevision} color="bg-amber-50 text-amber-600" icon={<Eye size={20} />} />
-            <StatCard label="Completadas" value={completadas} color="bg-green-50 text-green-600" icon={<CheckCircle2 size={20} />} />
+          {/* MÉTRICAS / STAT CARDS RESPONSIVAS (2 cols en móvil, 5 en desktop) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
+            <StatCard label="Total de actividades" value={totalActividades} color="bg-indigo-50 text-indigo-600" icon={<ListChecks size={18} />} />
+            <StatCard label="Pendientes" value={pendientes} color="bg-gray-50 text-gray-400" icon={<Clock size={18} />} />
+            <StatCard label="En proceso" value={enProceso} color="bg-blue-50 text-blue-600" icon={<AlertCircle size={18} />} />
+            <StatCard label="En revisión" value={enRevision} color="bg-amber-50 text-amber-600" icon={<Eye size={18} />} />
+            <StatCard label="Completadas" value={completadas} color="bg-green-50 text-green-600" icon={<CheckCircle2 size={18} />} />
           </div>
 
           {/* SECCIÓN INTERACTIVA DE DOS COLUMNAS */}
@@ -169,17 +169,16 @@ export const EstudianteDashboard: React.FC = () => {
               />
 
               {/* GRÁFICA DE RECHARTS POR ESTADO */}
-              <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow-xs">
-                <h3 className="text-sm font-bold text-gray-900 mb-4">
+              <div className="bg-white border border-gray-100 p-4 sm:p-6 rounded-2xl shadow-xs">
+                <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-4">
                   Progreso por estado
                 </h3>
                 <div className="w-full h-[180px]">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData} barSize={32}>
+                    <BarChart data={chartData} barSize={28}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                      {/* 🟢 allowDecimals={false} asegura números enteros limpios en el eje Y */}
-                      <YAxis tick={{ fontSize: 11, fill: '#64748b' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} allowDecimals={false} />
                       <Tooltip cursor={{ fill: "#f8fafc" }} />
                       <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                         {chartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
@@ -189,26 +188,26 @@ export const EstudianteDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* HU-032: GRÁFICO POR RESPONSABLE */}
+              {/* GRÁFICO POR RESPONSABLE */}
               <GraficoActividadesResponsables
                 actividades={actividadesVisibles}
                 miembrosEquipo={miembrosEquipo}
               />
 
               {/* PRÓXIMAS ACTIVIDADES */}
-              <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow-xs">
-                <h3 className="text-sm font-bold text-gray-900 mb-3">
+              <div className="bg-white border border-gray-100 p-4 sm:p-6 rounded-2xl shadow-xs">
+                <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-3">
                   Próximas actividades
                 </h3>
                 <div className="flex flex-col">
                   {proximasActividades.length > 0 ? (
                     proximasActividades.map((a) => (
-                      <div key={a.id} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0">
-                        <div className="flex items-center gap-2.5 min-w-0">
+                      <div key={a.id} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
                           <Circle size={14} className="text-gray-300 shrink-0" />
-                          <span className="text-sm font-medium text-gray-800 truncate">{a.name}</span>
+                          <span className="text-xs sm:text-sm font-medium text-gray-800 truncate">{a.name}</span>
                         </div>
-                        <span className="text-xs text-gray-400 font-medium shrink-0 pl-2">
+                        <span className="text-[11px] sm:text-xs text-gray-400 font-medium shrink-0 pl-2">
                           {new Date(a.deadline).toLocaleDateString("es-MX")}
                         </span>
                       </div>
@@ -222,14 +221,14 @@ export const EstudianteDashboard: React.FC = () => {
             </div>
 
             {/* COLUMNA DERECHA */}
-            <div className="space-y-6 w-full">
+            <div className="space-y-6 w-full min-w-0">
               
               {/* IR AL TABLERO KANBAN */}
-              <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow-xs flex flex-col items-center gap-3">
+              <div className="bg-white border border-gray-100 p-5 sm:p-6 rounded-2xl shadow-xs flex flex-col items-center gap-3">
                 <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-900">
                   <LayoutGrid size={22} />
                 </div>
-                <p className="text-sm font-bold text-gray-900 text-center">Ir al tablero Kanban</p>
+                <p className="text-xs sm:text-sm font-bold text-gray-900 text-center">Ir al tablero Kanban</p>
                 <button
                   type="button"
                   onClick={() => navigate(`/estudiante-kanban${projectIdParam ? `?projectId=${projectIdParam}` : ''}`)}
@@ -240,17 +239,17 @@ export const EstudianteDashboard: React.FC = () => {
               </div>
 
               {/* ACTIVIDAD RECIENTE */}
-              <div className="bg-white border border-gray-100 p-6 rounded-2xl shadow-xs">
-                <h3 className="text-sm font-bold text-gray-900 mb-3">
+              <div className="bg-white border border-gray-100 p-4 sm:p-6 rounded-2xl shadow-xs">
+                <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-3">
                   Actividad reciente
                 </h3>
                 {recentLogs.length > 0 ? (
                   <div className="flex flex-col gap-3.5">
                     {recentLogs.map((l) => (
-                      <div key={l.id} className="flex gap-2.5">
+                      <div key={l.id} className="flex gap-2.5 items-start">
                         <div className="w-1.5 h-1.5 rounded-full bg-black mt-1.5 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-gray-800 leading-snug">{l.action}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-medium text-gray-800 leading-snug break-words">{l.action}</p>
                           <p className="text-[11px] text-gray-400 mt-0.5">{l.time}</p>
                         </div>
                       </div>

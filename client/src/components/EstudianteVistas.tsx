@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Search, Plus, Edit2, Clock, CheckCircle2, AlertCircle, 
-  Eye, CheckSquare, ArrowLeft, Send, FileText, Paperclip, Folder, Circle, Upload, Trash2
+  Eye, CheckSquare, ArrowLeft, Send, Link as LinkIcon, FileText, Paperclip, Folder, Circle, Package, Upload, Trash2, X
 } from 'lucide-react';
 
 import { API_BASE_URL, SERVER_URL } from '../config/api';
@@ -24,17 +24,17 @@ const ESTADO_BADGES: Record<string, { label: string; cls: string }> = {
   Completado: { label: 'Completado', cls: 'bg-green-50 text-green-600 font-medium' },
 };
 
-// 🟢 Componente de Prioridad estilo píldora pastel idéntico a Figma
 function PriorityBadge({ priority }: { priority?: PrioridadActividad | string }) {
+  const pStr = String(priority || '').toUpperCase();
   let label = 'Alta';
-  let cls = 'bg-rose-50 text-rose-600'; // Rojo pastel para Alta
+  let cls = 'bg-rose-50 text-rose-600';
 
-  if (priority === 'MED' || priority === 'Media') {
+  if (pStr === 'MED' || pStr === 'MEDIA' || pStr === 'Media') {
     label = 'Media';
-    cls = 'bg-amber-50 text-amber-600'; // Ámbar/Amarillo pastel para Media
-  } else if (priority === 'LOW' || priority === 'Baja') {
+    cls = 'bg-amber-50 text-amber-600';
+  } else if (pStr === 'LOW' || pStr === 'BAJA' || pStr === 'Baja') {
     label = 'Baja';
-    cls = 'bg-emerald-50 text-emerald-600'; // Verde pastel para Baja
+    cls = 'bg-emerald-50 text-emerald-600';
   }
 
   return (
@@ -45,21 +45,26 @@ function PriorityBadge({ priority }: { priority?: PrioridadActividad | string })
 }
 
 function mapStatusToPrisma(s: string): EstadoActividad {
-  if (s === 'En Proceso' || s === 'IN_PROCESS' || s === 'En proceso') return 'IN_PROCESS';
-  if (s === 'En Revisión' || s === 'IN_REVIEW' || s === 'En revisión') return 'IN_REVIEW';
-  if (s === 'Completado' || s === 'DONE' || s === 'Completada') return 'DONE';
+  const lower = String(s || '').toLowerCase();
+  if (lower.includes('proceso') || lower === 'in_process') return 'IN_PROCESS';
+  if (lower.includes('revisión') || lower.includes('revision') || lower === 'in_review') return 'IN_REVIEW';
+  if (lower.includes('completado') || lower.includes('completada') || lower === 'done') return 'DONE';
   return 'PENDING';
 }
 
 function formatearFecha(f?: string) {
-  if (!f) return '23/05/2025';
+  if (!f) return '23/05/2026';
   const d = new Date(f);
   return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
 }
 
 function formatearFechaInput(f?: string) {
   if (!f) return '';
-  return new Date(f).toISOString().split('T')[0];
+  const d = new Date(f);
+  const anio = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
 }
 
 interface Miembro {
@@ -78,6 +83,7 @@ interface Actividad {
   name: string;
   description: string | null;
   deadline: string;
+  createdAt?: string;
   status: string;
   priority?: PrioridadActividad;
   projectId?: string | null;
@@ -115,7 +121,6 @@ function abrirEvidenciaUrl(url: string) {
   }
 }
 
-// 🟢 Lee el nombre del estudiante logueado desde localStorage (guardado en el Login)
 function getUserNameFromStorage() {
   try {
     const userStr = localStorage.getItem('user');
@@ -128,7 +133,6 @@ function getUserNameFromStorage() {
 }
 
 export const ActividadesPage: React.FC = () => {
-  // 🟢 NUEVO: leemos los query params de la URL (?id=... y/o ?projectId=...)
   const [searchParams] = useSearchParams();
 
   const [actividades, setActividades] = useState<Actividad[]>([]);
@@ -142,6 +146,7 @@ export const ActividadesPage: React.FC = () => {
   const [vistaDetalle, setVistaDetalle] = useState<Actividad | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState<Actividad | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const [formDraft, setFormDraft] = useState({
     nombre: '',
@@ -176,6 +181,10 @@ export const ActividadesPage: React.FC = () => {
   const currentUserId = getUserIdFromToken();
   const nombreEstudiante = getUserNameFromStorage();
 
+  // ✅ FIX: ahora esta función siempre re-sincroniza actividadSeleccionada
+  // y vistaDetalle con los datos frescos del backend, buscando por id.
+  // Antes solo asignaba un valor cuando actividadSeleccionada era null,
+  // por eso los cambios de prioridad/estado no se reflejaban tras editar.
   const fetchActividades = async () => {
     setLoading(true);
     try {
@@ -185,7 +194,18 @@ export const ActividadesPage: React.FC = () => {
         const data = await res.json();
         const lista: Actividad[] = data.actividades || [];
         setActividades(lista);
-        if (lista.length > 0 && !actividadSeleccionada) setActividadSeleccionada(lista[0]);
+
+        // Re-sincroniza la actividad seleccionada (panel "Detalle rápido")
+        setActividadSeleccionada(prev => {
+          if (!prev) return lista[0] ?? null;
+          return lista.find(a => a.id === prev.id) ?? lista[0] ?? null;
+        });
+
+        // Re-sincroniza la actividad en vista de detalle completo, si está abierta
+        setVistaDetalle(prev => {
+          if (!prev) return prev;
+          return lista.find(a => a.id === prev.id) ?? prev;
+        });
       }
     } catch (err) {
       console.error('Error al cargar actividades:', err);
@@ -202,14 +222,8 @@ export const ActividadesPage: React.FC = () => {
         fetch(`${API_BASE_URL}/actividades/proyectos`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
-      if (resU.ok) {
-        const dataU = await resU.json();
-        setUsuariosDisponibles(dataU.usuarios || []);
-      }
-      if (resP.ok) {
-        const dataP = await resP.json();
-        setProyectosDisponibles(dataP.proyectos || []);
-      }
+      if (resU.ok) setUsuariosDisponibles((await resU.json()).usuarios || []);
+      if (resP.ok) setProyectosDisponibles((await resP.json()).proyectos || []);
     } catch (err) {
       console.error('Error al cargar usuarios o proyectos:', err);
     }
@@ -220,9 +234,6 @@ export const ActividadesPage: React.FC = () => {
     fetchUsuariosYProyectos();
   }, []);
 
-  // 🟢 NUEVO: si llegamos desde otra pantalla con ?id=xxxx en la URL,
-  // abrimos automáticamente el detalle de esa actividad en cuanto
-  // termine de cargar el listado.
   useEffect(() => {
     const idDesdeUrl = searchParams.get('id');
     if (idDesdeUrl && actividades.length > 0) {
@@ -234,14 +245,7 @@ export const ActividadesPage: React.FC = () => {
     }
   }, [searchParams, actividades]);
 
-  // 🟢 NUEVO: si llegamos con ?projectId=xxxx (ej. botón "Ver todas" de Proyectos),
-  // dejamos solo visibles las actividades de ese proyecto en el listado.
-  useEffect(() => {
-    const projectIdDesdeUrl = searchParams.get('projectId');
-    if (projectIdDesdeUrl) {
-      setSearch(''); // limpiamos búsqueda de texto para no ocultar resultados
-    }
-  }, [searchParams]);
+  const projectIdDesdeUrl = searchParams.get('projectId');
 
   const fetchEvidenciasDeActividad = async (actividadId: string) => {
     try {
@@ -262,17 +266,12 @@ export const ActividadesPage: React.FC = () => {
   useEffect(() => {
     if (vistaDetalle) {
       const token = localStorage.getItem('token');
-
-      fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/comentarios`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/comentarios`, { headers: { Authorization: `Bearer ${token}` } })
         .then(res => res.json())
         .then(data => setComentarios(data.comentarios || []))
         .catch(err => console.error('Error comentarios:', err));
 
-      fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/evaluacion`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/evaluacion`, { headers: { Authorization: `Bearer ${token}` } })
         .then(res => res.json())
         .then(data => setEvaluacion(data.evaluacion || null))
         .catch(err => console.error('Error evaluación:', err));
@@ -283,6 +282,7 @@ export const ActividadesPage: React.FC = () => {
 
   const handleCrearActividad = async (e: React.FormEvent) => {
     e.preventDefault();
+    setModalError(null);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(API_ACTIVIDADES_URL, {
@@ -304,16 +304,17 @@ export const ActividadesPage: React.FC = () => {
         fetchActividades();
       } else {
         const err = await res.json();
-        alert(err.message || 'Error al crear la actividad.');
+        setModalError(err.message || 'Error al crear la actividad.');
       }
     } catch (err) {
-      console.error('Error al crear actividad:', err);
+      setModalError('Error de conexión al crear la actividad.');
     }
   };
 
   const handleEditarActividad = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editModalOpen) return;
+    setModalError(null);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_ACTIVIDADES_URL}/${editModalOpen.id}`, {
@@ -335,10 +336,10 @@ export const ActividadesPage: React.FC = () => {
         fetchActividades();
       } else {
         const err = await res.json();
-        alert(err.message || 'Error al actualizar actividad.');
+        setModalError(err.message || 'Error al actualizar actividad.');
       }
     } catch (err) {
-      console.error('Error al actualizar actividad:', err);
+      setModalError('Error de conexión al actualizar.');
     }
   };
 
@@ -369,12 +370,7 @@ export const ActividadesPage: React.FC = () => {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      if (res.ok) {
-        setComentarios(prev => prev.filter(c => c.id !== comentarioId));
-      } else {
-        alert('No se pudo eliminar el comentario.');
-      }
+      if (res.ok) setComentarios(prev => prev.filter(c => c.id !== comentarioId));
     } catch (err) {
       console.error('Error al eliminar comentario:', err);
     }
@@ -414,11 +410,8 @@ export const ActividadesPage: React.FC = () => {
         body: formData
       });
 
-      if (res.ok) {
-        await fetchEvidenciasDeActividad(vistaDetalle.id);
-      } else {
-        alert('Error al subir el archivo.');
-      }
+      if (res.ok) await fetchEvidenciasDeActividad(vistaDetalle.id);
+      else alert('Error al subir el archivo.');
     } catch (err) {
       console.error('Error al subir archivo:', err);
     } finally {
@@ -441,6 +434,7 @@ export const ActividadesPage: React.FC = () => {
   };
 
   const abrirEditar = (act: Actividad) => {
+    setModalError(null);
     setEditModalOpen(act);
     setFormDraft({
       nombre: act.name,
@@ -456,19 +450,12 @@ export const ActividadesPage: React.FC = () => {
   const renderStatusIcon = (statusStr: string) => {
     const prismaStatus = mapStatusToPrisma(statusStr);
     switch (prismaStatus) {
-      case 'PENDING':
-        return <Circle size={18} className="text-gray-300" />;
-      case 'IN_PROCESS':
-        return <AlertCircle size={18} className="text-blue-500" />;
-      case 'IN_REVIEW':
-        return <Clock size={18} className="text-amber-500" />;
-      case 'DONE':
-        return <CheckCircle2 size={18} className="text-emerald-500" />;
+      case 'PENDING': return <Circle size={18} className="text-gray-300" />;
+      case 'IN_PROCESS': return <AlertCircle size={18} className="text-blue-500" />;
+      case 'IN_REVIEW': return <Clock size={18} className="text-amber-500" />;
+      case 'DONE': return <CheckCircle2 size={18} className="text-emerald-500" />;
     }
   };
-
-  // 🟢 NUEVO: si viene projectId en la URL, filtramos también por proyecto
-  const projectIdDesdeUrl = searchParams.get('projectId');
 
   const actividadesFiltradas = actividades.filter(a => {
     const estadoPrisma = mapStatusToPrisma(a.status);
@@ -492,62 +479,49 @@ export const ActividadesPage: React.FC = () => {
     completadas: actividades.filter(a => mapStatusToPrisma(a.status) === 'DONE').length,
   };
 
-  // 🟢 VISTA DE DETALLE IDÉNTICA A FIGMA
   if (vistaDetalle) {
     const badgeObj = ESTADO_BADGES[vistaDetalle.status] || ESTADO_BADGES['PENDING'];
-    const nombreProyecto = proyectosDisponibles.find(p => p.id === vistaDetalle.projectId)?.name || 'Sin proyecto asignado';
+    const nombreProyecto = proyectosDisponibles.find(p => p.id === vistaDetalle.projectId)?.name || 'ClassBoard Equipo A';
     const comentariosVisibles = comentarios.filter(c => !c.content.startsWith('__EVALUACION_JSON__:'));
 
     return (
-      <div className="p-6 space-y-6 w-full font-sans antialiased text-gray-900 box-border">
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleSubirArchivoEvidencia}
-          accept=".pdf,.docx,.doc,.png,.jpg,.zip"
-          className="hidden"
-        />
+      <div className="p-4 sm:p-6 space-y-6 w-full font-sans antialiased text-gray-900 box-border">
+        <input type="file" ref={fileInputRef} onChange={handleSubirArchivoEvidencia} accept=".pdf,.docx,.doc,.png,.jpg,.zip" className="hidden" />
 
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setVistaDetalle(null)} className="p-1 text-gray-400 hover:text-gray-700 transition cursor-pointer">
+          <div className="flex items-center gap-3 min-w-0 pr-2">
+            <button onClick={() => setVistaDetalle(null)} className="p-1 text-gray-400 hover:text-gray-700 transition cursor-pointer shrink-0">
               <ArrowLeft size={20} />
             </button>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight">{vistaDetalle.name}</h1>
-              <p className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
-                <Folder size={12} className="text-blue-500" />
-                {nombreEstudiante} · <strong className="text-gray-700">{nombreProyecto}</strong>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight truncate">{vistaDetalle.name}</h1>
+              <p className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5 truncate">
+                <Folder size={12} className="text-blue-500 shrink-0" />
+                <span className="truncate">Proyecto: <strong className="text-gray-700">{nombreProyecto}</strong></span>
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2.5 text-xs">
-            <span className="text-gray-400 font-medium">Estado:</span>
+          <div className="flex items-center gap-2 text-xs shrink-0">
             <span className={`px-3 py-1 rounded-full text-xs font-medium ${badgeObj.cls}`}>{badgeObj.label}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Descripción</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Descripción</h3>
+              <p className="text-xs text-gray-600 leading-relaxed break-words">
                 {vistaDetalle.description || 'Analizar necesidades y comportamientos de los usuarios del sistema.'}
               </p>
 
-              <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-50 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-gray-50 text-xs">
                 <div>
                   <p className="text-gray-400 font-medium">Responsable</p>
-                  <p className="font-bold text-gray-800 mt-0.5">
-                    {vistaDetalle.assignees?.[0]?.user?.name || 'Ana García'}
-                  </p>
+                  <p className="font-bold text-gray-800 mt-0.5 truncate">{vistaDetalle.assignees?.[0]?.user?.name || 'Ana García'}</p>
                 </div>
                 <div>
                   <p className="text-gray-400 font-medium">Prioridad</p>
-                  <div className="mt-0.5">
-                    <PriorityBadge priority={vistaDetalle.priority} />
-                  </div>
+                  <div className="mt-0.5"><PriorityBadge priority={vistaDetalle.priority} /></div>
                 </div>
                 <div>
                   <p className="text-gray-400 font-medium">Fecha límite</p>
@@ -556,10 +530,8 @@ export const ActividadesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                Comentarios ({comentariosVisibles.length})
-              </h3>
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Comentarios ({comentariosVisibles.length})</h3>
 
               <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
                 {comentariosVisibles.map((c) => (
@@ -567,30 +539,23 @@ export const ActividadesPage: React.FC = () => {
                     <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold flex items-center justify-center shrink-0 text-[10px]">
                       {c.author?.name ? c.author.name.slice(0, 2).toUpperCase() : 'AG'}
                     </div>
-                    <div className="flex-1 bg-gray-50/60 p-3 rounded-xl border border-gray-100 space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-gray-800">{c.author?.name || 'Ana García'}</span>
-                        <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-50/60 p-3 rounded-xl border border-gray-100 space-y-1 min-w-0">
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="font-bold text-gray-800 truncate">{c.author?.name || 'Ana García'}</span>
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-[10px] text-gray-400">{formatearFecha(c.createdAt)}</span>
                           {String(c.author?.id) === String(currentUserId) && (
-                            <button
-                              onClick={() => handleEliminarComentario(c.id)}
-                              className="text-gray-400 hover:text-red-600 transition p-0.5 cursor-pointer"
-                              title="Eliminar comentario"
-                            >
+                            <button onClick={() => handleEliminarComentario(c.id)} className="text-gray-400 hover:text-red-600 transition p-0.5 cursor-pointer">
                               <Trash2 size={12} />
                             </button>
                           )}
                         </div>
                       </div>
-                      <p className="text-gray-600 leading-normal">{c.content}</p>
+                      <p className="text-gray-600 leading-normal break-words">{c.content}</p>
                     </div>
                   </div>
                 ))}
-
-                {comentariosVisibles.length === 0 && (
-                  <p className="text-xs text-gray-400 italic py-2">No hay comentarios aún. Escribe el primero.</p>
-                )}
+                {comentariosVisibles.length === 0 && <p className="text-xs text-gray-400 italic py-2">No hay comentarios aún. Escribe el primero.</p>}
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -600,12 +565,9 @@ export const ActividadesPage: React.FC = () => {
                   onChange={e => setNuevoComentario(e.target.value)}
                   placeholder="Escribe un comentario..."
                   onKeyDown={e => e.key === 'Enter' && handleEnviarComentario()}
-                  className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:bg-white"
+                  className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:bg-white min-w-0"
                 />
-                <button 
-                  onClick={handleEnviarComentario}
-                  className="p-3 bg-black text-white rounded-xl hover:bg-gray-900 transition flex items-center justify-center cursor-pointer"
-                >
+                <button onClick={handleEnviarComentario} className="p-3 bg-black text-white rounded-xl hover:bg-gray-900 transition flex items-center justify-center cursor-pointer shrink-0">
                   <Send size={14} />
                 </button>
               </div>
@@ -613,41 +575,24 @@ export const ActividadesPage: React.FC = () => {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
-                Evidencias ({evidencias.length})
-              </h3>
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Evidencias ({evidencias.length})</h3>
 
               <div className="space-y-2">
                 {evidencias.map((e) => (
-                  <div
-                    key={e.id}
-                    className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700"
-                  >
-                    <div className="flex items-center gap-2 truncate pr-2">
+                  <div key={e.id} className="flex items-center justify-between p-2.5 bg-gray-50/80 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700 gap-2">
+                    <div className="flex items-center gap-2 truncate min-w-0 flex-1">
                       <FileText size={14} className="text-gray-500 shrink-0" />
-                      <button
-                        type="button"
-                        onClick={() => abrirEvidenciaUrl(e.url)}
-                        className="truncate font-bold text-gray-800 hover:underline text-left cursor-pointer"
-                        title={e.url}
-                      >
+                      <button type="button" onClick={() => abrirEvidenciaUrl(e.url)} className="truncate font-bold text-gray-800 hover:underline text-left cursor-pointer">
                         {e.url}
                       </button>
                     </div>
-                    <button
-                      onClick={() => handleEliminarEvidencia(e.id)}
-                      className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0"
-                      title="Eliminar evidencia"
-                    >
+                    <button onClick={() => handleEliminarEvidencia(e.id)} className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0">
                       <Trash2 size={13} />
                     </button>
                   </div>
                 ))}
-
-                {evidencias.length === 0 && (
-                  <p className="text-xs text-gray-400 italic py-1">Sin evidencias registradas.</p>
-                )}
+                {evidencias.length === 0 && <p className="text-xs text-gray-400 italic py-1">Sin evidencias registradas.</p>}
               </div>
 
               {mostrandoInputEvidencia ? (
@@ -658,7 +603,7 @@ export const ActividadesPage: React.FC = () => {
                       value={nuevaEvidenciaUrl}
                       onChange={e => setNuevaEvidenciaUrl(e.target.value)}
                       placeholder="Pega un enlace (https://...)"
-                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none"
+                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none min-w-0"
                     />
                     <button
                       type="button"
@@ -669,24 +614,14 @@ export const ActividadesPage: React.FC = () => {
                     </button>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <button 
-                      onClick={() => setMostrandoInputEvidencia(false)}
-                      className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button 
-                      onClick={handleSubirEvidenciaLink}
-                      className="px-3 py-1 text-[11px] font-bold text-white bg-black rounded-lg cursor-pointer"
-                    >
-                      Guardar enlace
-                    </button>
+                    <button onClick={() => setMostrandoInputEvidencia(false)} className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer">Cancelar</button>
+                    <button onClick={handleSubirEvidenciaLink} className="px-3 py-1 text-[11px] font-bold text-white bg-black rounded-lg cursor-pointer">Guardar enlace</button>
                   </div>
                 </div>
               ) : (
                 <button 
                   onClick={() => setMostrandoInputEvidencia(true)}
-                  className="w-full py-2 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-2.5 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Paperclip size={13} /> Subir evidencia
                 </button>
@@ -694,40 +629,29 @@ export const ActividadesPage: React.FC = () => {
             </div>
 
             {evaluacion && (
-              <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-3 text-xs">
+              <div className="bg-blue-50/60 p-6 rounded-2xl border border-blue-100 shadow-sm space-y-3 text-xs">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Evaluación</h3>
-                  <span className="text-blue-600 font-extrabold text-sm">{evaluacion.score} / 10</span>
+                  <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider">Evaluación</h3>
+                  <span className="text-blue-700 font-extrabold text-sm">{evaluacion.score} / 10</span>
                 </div>
-
-                <div className="space-y-1.5 pt-2 border-t border-gray-50">
+                <div className="space-y-1.5 pt-2 border-t border-blue-100">
                   {evaluacion.criteria?.map((crit) => (
                     <div key={crit.id} className="flex justify-between text-gray-600">
                       <span>{crit.nombre}</span>
-                      <span className="font-bold text-gray-800">{crit.score}/5</span>
+                      <span className="font-bold">{crit.score}/5</span>
                     </div>
                   ))}
                 </div>
-
-                {evaluacion.comentario && (
-                  <p className="text-gray-600 pt-2 border-t border-gray-50 leading-relaxed">
-                    {evaluacion.comentario}
-                  </p>
-                )}
-
-                {evaluacion.evaluator?.name && (
-                  <p className="text-[10px] text-gray-400 pt-1">
-                    Evaluado por {evaluacion.evaluator.name}
-                  </p>
-                )}
+                {evaluacion.comentario && <p className="text-gray-600 pt-2 border-t border-blue-100 leading-relaxed">{evaluacion.comentario}</p>}
+                {evaluacion.evaluator?.name && <p className="text-[10px] text-gray-400 pt-1">Evaluado por {evaluacion.evaluator.name}</p>}
               </div>
             )}
 
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-3 text-xs">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Información</h3>
+            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-3 text-xs">
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-2">Información</h3>
               <div className="flex justify-between text-gray-500">
-                <span>Estudiante</span>
-                <span className="font-bold text-blue-600">{nombreEstudiante}</span>
+                <span>Proyecto</span>
+                <span className="font-bold text-blue-600">{nombreProyecto}</span>
               </div>
               <div className="flex justify-between text-gray-500">
                 <span>Creada el</span>
@@ -738,19 +662,6 @@ export const ActividadesPage: React.FC = () => {
                 <span className="font-bold text-gray-800">Juan Pérez</span>
               </div>
             </div>
-
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-3 text-xs">
-              <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2">Checklist</h3>
-              <div className="space-y-2">
-                {['Definir segmentos de usuarios', 'Diseñar encuesta', 'Aplicar entrevistas', 'Analizar resultados'].map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2.5 text-xs text-gray-600 font-medium">
-                    <CheckSquare size={14} className="text-gray-800 shrink-0" />
-                    <span>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
           </div>
         </div>
       </div>
@@ -758,14 +669,15 @@ export const ActividadesPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border">
+    <div className="p-4 sm:p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border relative">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Actividades</h1>
-          <p className="text-xs text-gray-400 font-medium mt-0.5">{nombreEstudiante}</p>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight truncate">Actividades</h1>
+          <p className="text-xs text-gray-400 font-medium mt-0.5 truncate">Proyecto: ClassBoard Equipo A</p>
         </div>
         <button 
           onClick={() => {
+            setModalError(null);
             setFormDraft({
               nombre: '',
               descripcion: '',
@@ -777,75 +689,61 @@ export const ActividadesPage: React.FC = () => {
             });
             setCreateModalOpen(true);
           }}
-          className="px-4 py-2.5 bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs hover:bg-gray-900 transition cursor-pointer"
+          className="w-full sm:w-auto px-4 py-2.5 bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-gray-900 transition cursor-pointer shrink-0"
         >
           <Plus size={15} /> Agregar actividad
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-            <CheckSquare size={20} />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.total}</p>
-            <p className="text-xs text-gray-400 font-medium">Total de actividades</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><CheckSquare size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.total}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">Total</p>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center shrink-0">
-            <Clock size={20} />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.pendientes}</p>
-            <p className="text-xs text-gray-400 font-medium">Pendientes</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center shrink-0"><Clock size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.pendientes}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">Pendientes</p>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <AlertCircle size={20} />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.enProceso}</p>
-            <p className="text-xs text-gray-400 font-medium">En proceso</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><AlertCircle size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.enProceso}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">En proceso</p>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <Eye size={20} />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.enRevision}</p>
-            <p className="text-xs text-gray-400 font-medium">En revisión</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><Eye size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.enRevision}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">En revisión</p>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs">
-          <div className="w-10 h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
-            <CheckCircle2 size={20} />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{counts.completadas}</p>
-            <p className="text-xs text-gray-400 font-medium">Completadas</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0 col-span-2 sm:col-span-1">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0"><CheckCircle2 size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.completadas}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">Completadas</p>
           </div>
         </div>
       </div>
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative flex-1 w-full sm:max-w-xs">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input 
             value={search} 
             onChange={e => setSearch(e.target.value)} 
             placeholder="Buscar actividad..." 
-            className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200/80 rounded-xl text-xs font-medium focus:outline-none focus:border-gray-300 transition" 
+            className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200/80 rounded-xl text-xs font-medium focus:outline-none focus:border-gray-300 transition" 
           />
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
           {[
             { key: 'Todos', label: 'Todos' },
             { key: 'PENDING', label: 'Pendiente' },
@@ -856,7 +754,7 @@ export const ActividadesPage: React.FC = () => {
             <button 
               key={f.key} 
               onClick={() => setFilterStatus(f.key)} 
-              className={`px-3 py-2 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
                 filterStatus === f.key ? 'bg-black text-white' : 'bg-white border border-gray-200/80 text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -881,7 +779,7 @@ export const ActividadesPage: React.FC = () => {
                 <div 
                   key={act.id} 
                   onClick={() => setActividadSeleccionada(act)}
-                  className={`bg-white p-5 rounded-2xl border transition cursor-pointer shadow-xs flex items-center justify-between gap-4 ${
+                  className={`bg-white p-4 rounded-2xl border transition cursor-pointer shadow-sm flex items-center justify-between gap-4 ${
                     isSelected ? 'border-gray-300 ring-1 ring-gray-200' : 'border-gray-100 hover:border-gray-200'
                   }`}
                 >
@@ -890,13 +788,13 @@ export const ActividadesPage: React.FC = () => {
                       {renderStatusIcon(act.status)}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-bold text-gray-900 text-sm truncate">{act.name}</h4>
-                      <p className="text-xs text-gray-400 font-medium mt-0.5">Fecha límite: {formatearFecha(act.deadline)}</p>
+                      <h4 className="font-bold text-gray-900 text-xs truncate">{act.name}</h4>
+                      <p className="text-[11px] text-gray-400 font-medium mt-0.5">Fecha límite: {formatearFecha(act.deadline)}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2.5 shrink-0">
-                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-semibold ${badge.cls}`}>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] ${badge.cls}`}>
                       {badge.label}
                     </span>
                     <button 
@@ -904,7 +802,7 @@ export const ActividadesPage: React.FC = () => {
                         e.stopPropagation();
                         setVistaDetalle(act);
                       }}
-                      className="px-3 py-1.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                      className="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition cursor-pointer"
                     >
                       Ver detalle
                     </button>
@@ -913,7 +811,7 @@ export const ActividadesPage: React.FC = () => {
                         e.stopPropagation();
                         abrirEditar(act);
                       }}
-                      className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-xs font-bold px-1.5 transition cursor-pointer"
+                      className="flex items-center gap-1 text-gray-400 hover:text-gray-700 text-xs font-bold px-1 transition cursor-pointer"
                     >
                       <Edit2 size={13} /> Editar
                     </button>
@@ -929,16 +827,16 @@ export const ActividadesPage: React.FC = () => {
         </div>
 
         {actividadSeleccionada && (
-          <div className="w-full lg:w-80 bg-white p-6 rounded-2xl border border-gray-100 shadow-xs shrink-0 space-y-5 lg:sticky lg:top-6 text-xs">
+          <div className="w-full lg:w-72 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shrink-0 space-y-4 lg:sticky lg:top-6 text-xs">
             <div>
-              <p className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-1">DETALLE RÁPIDO</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">DETALLE RÁPIDO</p>
               <h3 className="font-bold text-gray-900 text-sm leading-snug">{actividadSeleccionada.name}</h3>
-              <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+              <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
                 {actividadSeleccionada.description || 'Analizar necesidades y comportamientos de los usuarios del sistema.'}
               </p>
             </div>
 
-            <div className="space-y-3 border-t border-gray-50 pt-4 text-xs">
+            <div className="space-y-2 border-t border-gray-50 pt-3">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Prioridad</span>
                 <PriorityBadge priority={actividadSeleccionada.priority} />
@@ -959,12 +857,12 @@ export const ActividadesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="border-t border-gray-50 pt-4 space-y-2.5">
-              <p className="text-xs font-bold text-gray-900">Checklist</p>
-              <div className="space-y-2">
+            <div className="border-t border-gray-50 pt-3 space-y-2">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Checklist</p>
+              <div className="space-y-1.5">
                 {['Definir segmentos de usuarios', 'Diseñar encuesta', 'Aplicar entrevistas', 'Analizar resultados'].map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2.5 text-xs text-gray-600 font-medium">
-                    <CheckSquare size={14} className="text-gray-800 shrink-0" />
+                  <div key={idx} className="flex items-center gap-2 text-xs text-gray-600 font-medium">
+                    <CheckSquare size={13} className="text-slate-800 shrink-0" />
                     <span>{item}</span>
                   </div>
                 ))}
@@ -979,6 +877,11 @@ export const ActividadesPage: React.FC = () => {
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4 relative">
             <h3 className="text-sm font-bold text-gray-900 uppercase">Crear actividad</h3>
             <p className="text-xs text-gray-400">Completa los datos para la nueva actividad.</p>
+            {modalError && (
+              <p className="text-xs text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                {modalError}
+              </p>
+            )}
 
             <form onSubmit={handleCrearActividad} className="space-y-4 text-xs">
               <div>
@@ -1024,7 +927,7 @@ export const ActividadesPage: React.FC = () => {
                   <select 
                     value={formDraft.estado}
                     onChange={e => setFormDraft({ ...formDraft, estado: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
+                    className="w-full p-2.5 bg-white border border-gray-300 rounded-xl focus:outline-none focus:border-black font-semibold text-gray-900 cursor-pointer"
                   >
                     <option value="PENDING">Pendiente</option>
                     <option value="IN_PROCESS">En Proceso</option>
@@ -1093,7 +996,7 @@ export const ActividadesPage: React.FC = () => {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-xs cursor-pointer"
+                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-sm cursor-pointer"
                 >
                   Crear actividad
                 </button>
@@ -1108,6 +1011,11 @@ export const ActividadesPage: React.FC = () => {
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4 relative">
             <h3 className="text-sm font-bold text-gray-900 uppercase">Editar Actividad</h3>
             <p className="text-xs text-gray-400">Modifica los datos de la actividad seleccionada.</p>
+            {modalError && (
+              <p className="text-xs text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                {modalError}
+              </p>
+            )}
 
             <form onSubmit={handleEditarActividad} className="space-y-4 text-xs">
               <div>
@@ -1152,7 +1060,7 @@ export const ActividadesPage: React.FC = () => {
                   <select 
                     value={formDraft.estado}
                     onChange={e => setFormDraft({ ...formDraft, estado: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
+                    className="w-full p-2.5 bg-white border border-gray-300 rounded-xl focus:outline-none focus:border-black font-semibold text-gray-900 cursor-pointer"
                   >
                     <option value="PENDING">Pendiente</option>
                     <option value="IN_PROCESS">En Proceso</option>
@@ -1220,7 +1128,7 @@ export const ActividadesPage: React.FC = () => {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-xs cursor-pointer"
+                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-sm cursor-pointer"
                 >
                   Guardar cambios
                 </button>
@@ -1232,3 +1140,5 @@ export const ActividadesPage: React.FC = () => {
     </div>
   );
 };
+
+export default ActividadesPage;

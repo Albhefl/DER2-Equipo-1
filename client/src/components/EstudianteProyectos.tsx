@@ -22,12 +22,12 @@ function Badge({ label }: { label: string }) {
 
 function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs box-border">
+    <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-xs box-border min-w-0">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
         {icon}
       </div>
-      <div className="min-w-0">
-        <p className="text-2xl font-bold text-gray-900 leading-none mb-1">{value}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{value}</p>
         <p className="text-xs text-gray-400 font-medium truncate">{label}</p>
       </div>
     </div>
@@ -42,7 +42,7 @@ function formatearFechaParaInput(fechaRaw?: string) {
 function formatearFechaVista(fechaRaw?: string) {
   if (!fechaRaw) return '30/06/2026';
   const d = new Date(fechaRaw);
-  return `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth() + 1).toString().padStart(2, '0')}/${d.getUTCFullYear()}`;
+  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
 }
 
 interface UsuarioSimple {
@@ -65,6 +65,7 @@ interface Proyecto {
   description: string;
   startDate?: string;
   endDate?: string;
+  createdAt?: string;
   priority?: string;
   status?: string;
   progress?: number;
@@ -83,8 +84,6 @@ export const EstudianteProyectos: React.FC = () => {
   const [selectedProyecto, setSelectedProyecto] = useState<Proyecto | null>(null);
   const [actividadesProyecto, setActividadesProyecto] = useState<ActividadSimple[]>([]);
   const [cargandoActividades, setCargandoActividades] = useState(false);
-  
-  const [confirmarEliminacion, setConfirmarEliminacion] = useState(false);
 
   const [modo, setModo] = useState<'lista' | 'crear' | 'editar'>('lista');
   const [cargandoProyectos, setCargandoProyectos] = useState(true);
@@ -117,8 +116,7 @@ export const EstudianteProyectos: React.FC = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        const lista: Proyecto[] = data.proyectos || [];
-        setProyectos(lista);
+        setProyectos(data.proyectos || []);
       }
     } catch (err) {
       console.error('Error al obtener proyectos:', err);
@@ -136,14 +134,8 @@ export const EstudianteProyectos: React.FC = () => {
           fetch(`${API_BASE_URL}/usuarios`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
         
-        if (resE.ok) {
-          const dataE = await resE.json();
-          setProfesoresDisponibles(dataE.evaluadores || []);
-        }
-        if (resA.ok) {
-          const dataA = await resA.json();
-          setEstudiantesDisponibles(dataA.usuarios || []);
-        }
+        if (resE.ok) setProfesoresDisponibles((await resE.json()).evaluadores || []);
+        if (resA.ok) setEstudiantesDisponibles((await resA.json()).usuarios || []);
       } catch (err) {
         console.error('Error al obtener usuarios:', err);
       }
@@ -155,7 +147,6 @@ export const EstudianteProyectos: React.FC = () => {
 
   const seleccionarProyectoYCargarActividades = async (p: Proyecto) => {
     setSelectedProyecto(p);
-    setConfirmarEliminacion(false);
     setCargandoActividades(true);
 
     try {
@@ -195,7 +186,6 @@ export const EstudianteProyectos: React.FC = () => {
 
   const eliminarProyecto = async (id?: string) => {
     if (!id) return;
-
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_BASE_URL}/actividades/proyectos/${id}`, {
@@ -204,7 +194,6 @@ export const EstudianteProyectos: React.FC = () => {
       });
 
       if (res.ok) {
-        setConfirmarEliminacion(false);
         setSelectedProyecto(null);
         obtenerProyectos();
       } else {
@@ -212,7 +201,6 @@ export const EstudianteProyectos: React.FC = () => {
         alert(errData.message || 'No se pudo eliminar el proyecto.');
       }
     } catch (err) {
-      console.error('Error al eliminar proyecto:', err);
       alert('Error de conexión al intentar eliminar el proyecto.');
     }
   };
@@ -220,7 +208,6 @@ export const EstudianteProyectos: React.FC = () => {
   const agregarIntegrantePorCorreo = () => {
     setBackendError(null);
     if (!integranteEmail.trim()) return;
-
     const emailBuscado = integranteEmail.toLowerCase().trim();
     const estudianteEncontrado = estudiantesDisponibles.find(u => u.email.toLowerCase() === emailBuscado);
 
@@ -230,14 +217,13 @@ export const EstudianteProyectos: React.FC = () => {
       }
       setIntegranteEmail('');
     } else {
-      setBackendError(`No se encontró ningún estudiante registrado con el correo: ${emailBuscado}`);
+      setBackendError(`No se encontró ningún estudiante con el correo: ${emailBuscado}`);
     }
   };
 
   const asignarEvaluadorPorCorreo = () => {
     setBackendError(null);
     if (!evaluadorEmail.trim()) return;
-
     const emailBuscado = evaluadorEmail.toLowerCase().trim();
     const profesorEncontrado = profesoresDisponibles.find(p => p.email.toLowerCase() === emailBuscado);
 
@@ -245,7 +231,7 @@ export const EstudianteProyectos: React.FC = () => {
       setFormProyecto(prev => ({ ...prev, evaluators: [profesorEncontrado] }));
       setEvaluadorEmail('');
     } else {
-      setBackendError(`No se encontró ningún evaluador registrado con el correo: ${emailBuscado}`);
+      setBackendError(`No se encontró ningún evaluador con el correo: ${emailBuscado}`);
     }
   };
 
@@ -263,28 +249,24 @@ export const EstudianteProyectos: React.FC = () => {
     setSuccessMessage(null);
 
     const nombreTrim = formProyecto.name.trim();
-
     const yaExiste = proyectos.some(
       p => p.name.toLowerCase() === nombreTrim.toLowerCase() && p.id !== formProyecto.id
     );
 
     if (yaExiste) {
-      setBackendError(`Ya existe un proyecto registrado con el nombre "${nombreTrim}". Por favor usa uno diferente.`);
+      setBackendError(`Ya existe un proyecto con el nombre "${nombreTrim}".`);
       return;
     }
 
     const payload = { ...formProyecto, name: nombreTrim };
-
     if (!payload.startDate) {
       const hoy = new Date();
       payload.startDate = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
     }
 
-    if (payload.startDate && payload.endDate) {
-      if (payload.endDate < payload.startDate) {
-        setBackendError('La fecha de cierre no puede ser anterior a la fecha de inicio.');
-        return;
-      }
+    if (payload.startDate && payload.endDate && payload.endDate < payload.startDate) {
+      setBackendError('La fecha de cierre no puede ser anterior a la fecha de inicio.');
+      return;
     }
 
     try {
@@ -307,7 +289,6 @@ export const EstudianteProyectos: React.FC = () => {
         setBackendError(errData.message || 'Error al guardar el proyecto.');
       }
     } catch (err) {
-      console.error('Error al guardar proyecto:', err);
       setBackendError('Error de conexión con el servidor.');
     }
   };
@@ -328,7 +309,7 @@ export const EstudianteProyectos: React.FC = () => {
 
   if (modo === 'crear' || modo === 'editar') {
     return (
-      <div className="p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border max-w-4xl mx-auto">
+      <div className="p-4 sm:p-6 space-y-5 w-full max-w-4xl mx-auto font-sans antialiased text-gray-900 box-border overflow-x-hidden">
         <div className="flex items-center gap-3">
           <button onClick={() => setModo('lista')} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer">
             <ArrowLeft size={20} />
@@ -342,19 +323,19 @@ export const EstudianteProyectos: React.FC = () => {
         </div>
 
         {backendError && (
-          <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl font-medium flex items-center gap-2">
-            <AlertCircle size={16} /> {backendError}
+          <div className="bg-red-50 border border-red-200 text-red-600 text-sm p-3 rounded-xl font-medium flex items-center gap-2 break-all">
+            <AlertCircle size={16} className="shrink-0" /> <span>{backendError}</span>
           </div>
         )}
         
         {successMessage && (
           <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm p-3 rounded-xl font-medium flex items-center gap-2 animate-pulse">
-            <CheckCircle2 size={16} /> {successMessage}
+            <CheckCircle2 size={16} className="shrink-0" /> <span>{successMessage}</span>
           </div>
         )}
 
         <form onSubmit={guardarProyecto} className="space-y-6">
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Información del proyecto</h3>
 
             <div className="space-y-4">
@@ -424,56 +405,43 @@ export const EstudianteProyectos: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-3">
               <div>
                 <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider mb-1">Integrantes del proyecto</h3>
                 <p className="text-[11px] text-gray-400">Invita a tus compañeros usando su correo electrónico.</p>
               </div>
               
-              <div className="flex gap-2 w-full sm:w-auto">
+              <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                 <input 
                   type="email"
-                  name="integrante_email_custom"
-                  id="integrante_email_custom"
-                  autoComplete="off"
                   placeholder="correo@estudiante.com"
                   disabled={!!successMessage}
                   value={integranteEmail}
                   onChange={e => setIntegranteEmail(e.target.value)}
-                  className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none flex-1 sm:min-w-[220px]"
+                  className="p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none w-full sm:w-64"
                 />
                 <button 
                   type="button"
                   disabled={!!successMessage}
                   onClick={agregarIntegrantePorCorreo}
-                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 flex items-center gap-1 transition cursor-pointer"
+                  className="px-3 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 flex items-center justify-center gap-1 transition cursor-pointer shrink-0"
                 >
                   <Plus size={14} /> Agregar
                 </button>
               </div>
             </div>
 
-            <div className="space-y-2 mt-4">
-              <div className="grid grid-cols-12 text-[10px] font-bold text-gray-400 uppercase tracking-wider px-1">
-                <div className="col-span-6">Integrante</div>
-                <div className="col-span-5">Correo electrónico</div>
-                <div className="col-span-1 text-right">Acciones</div>
-              </div>
-
+            <div className="space-y-3 mt-4">
               {formProyecto.members.map(m => (
-                <div key={m.id} className="grid grid-cols-12 items-center gap-2 p-1.5">
-                  <div className="col-span-6">
-                    <input readOnly value={m.name} className="w-full p-2.5 bg-gray-50/70 border border-gray-100 rounded-xl text-xs font-medium text-gray-800" />
+                <div key={m.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-gray-50/70 rounded-xl border border-gray-100">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-gray-800 truncate">{m.name}</p>
+                    <p className="text-[11px] text-gray-500 truncate">{m.email}</p>
                   </div>
-                  <div className="col-span-5">
-                    <input readOnly value={m.email} className="w-full p-2.5 bg-gray-50/70 border border-gray-100 rounded-xl text-xs font-medium text-gray-500" />
-                  </div>
-                  <div className="col-span-1 text-right">
-                    <button type="button" disabled={!!successMessage} onClick={() => quitarIntegrante(m.id)} className="text-red-500 hover:text-red-700 text-xs font-bold cursor-pointer">
-                      Eliminar
-                    </button>
-                  </div>
+                  <button type="button" disabled={!!successMessage} onClick={() => quitarIntegrante(m.id)} className="text-red-500 hover:text-red-700 text-xs font-bold text-left sm:text-right cursor-pointer shrink-0">
+                    Eliminar
+                  </button>
                 </div>
               ))}
 
@@ -483,18 +451,15 @@ export const EstudianteProyectos: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
+          <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
             <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Evaluador asignado</h3>
 
             <div className="flex flex-col sm:flex-row sm:items-end gap-3">
                <div className="flex-1">
                 <label className="block text-xs font-bold text-gray-700 mb-1">Invitar evaluador por correo *</label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="email"
-                    name="evaluador_email_custom"
-                    id="evaluador_email_custom"
-                    autoComplete="off"
                     placeholder="correo@docente.com"
                     disabled={!!successMessage || formProyecto.evaluators.length > 0}
                     value={evaluadorEmail}
@@ -505,7 +470,7 @@ export const EstudianteProyectos: React.FC = () => {
                     type="button"
                     disabled={!!successMessage || formProyecto.evaluators.length > 0}
                     onClick={asignarEvaluadorPorCorreo}
-                    className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 transition cursor-pointer disabled:opacity-50"
+                    className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 transition cursor-pointer disabled:opacity-50 shrink-0"
                   >
                     Asignar
                   </button>
@@ -516,10 +481,10 @@ export const EstudianteProyectos: React.FC = () => {
             {formProyecto.evaluators[0] && (
               <div className="flex items-center justify-between p-3 mt-3 bg-emerald-50/50 border border-emerald-100 rounded-xl">
                 <div className="min-w-0 flex items-center gap-3">
-                  <div className="bg-emerald-100 p-2 rounded-lg">
+                  <div className="bg-emerald-100 p-2 rounded-lg shrink-0">
                     <CheckCircle2 size={16} className="text-emerald-600" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-xs font-bold text-gray-800 truncate">{formProyecto.evaluators[0].name}</p>
                     <p className="text-[11px] text-gray-500 truncate">{formProyecto.evaluators[0].email}</p>
                   </div>
@@ -536,19 +501,19 @@ export const EstudianteProyectos: React.FC = () => {
             )}
           </div>
 
-          <div className="flex justify-end gap-3">
+          <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 pt-2">
             <button 
               type="button" 
               disabled={!!successMessage}
               onClick={() => setModo('lista')}
-              className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer disabled:opacity-50"
+              className="w-full sm:w-auto px-4 py-2.5 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer disabled:opacity-50"
             >
               Cancelar
             </button>
             <button 
               type="submit" 
               disabled={!!successMessage}
-              className="px-5 py-2 text-xs font-bold text-white bg-black hover:bg-gray-900 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
+              className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-black hover:bg-gray-900 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
             >
               {successMessage ? 'Guardando...' : 'Guardar cambios'}
             </button>
@@ -559,7 +524,7 @@ export const EstudianteProyectos: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border">
+    <div className="p-4 sm:p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border relative">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Proyectos</h1>
@@ -573,13 +538,13 @@ export const EstudianteProyectos: React.FC = () => {
             setFormProyecto({ name: '', description: '', startDate: '', endDate: '', priority: 'Alta', status: 'Activo', members: [], evaluators: [] });
             setModo('crear');
           }}
-          className="px-4 py-2.5 bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs hover:bg-gray-900 transition cursor-pointer"
+          className="w-full sm:w-auto px-4 py-2.5 bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-xs hover:bg-gray-900 transition cursor-pointer"
         >
           <Plus size={15} /> Nuevo proyecto
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <StatCard label="Total de proyectos" value={counts.total} color="bg-indigo-50 text-indigo-600" icon={<FolderOpen size={18} />} />
         <StatCard label="Activos" value={counts.activos} color="bg-emerald-50 text-emerald-600" icon={<CheckCircle2 size={18} />} />
         <StatCard label="En proceso" value={counts.enProceso} color="bg-blue-50 text-blue-600" icon={<AlertCircle size={18} />} />
@@ -588,7 +553,7 @@ export const EstudianteProyectos: React.FC = () => {
       </div>
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative flex-1 w-full sm:max-w-xs">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input 
             value={search} 
@@ -612,8 +577,8 @@ export const EstudianteProyectos: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex flex-col lg:flex-row gap-6 items-start">
-        <div className="flex-1 w-full space-y-3">
+      <div className="flex flex-col lg:flex-row gap-6 items-start relative">
+        <div className="flex-1 w-full space-y-3 min-w-0">
           <h3 className="text-xs font-bold text-gray-900 mb-1">Lista de proyectos</h3>
 
           {cargandoProyectos ? (
@@ -629,33 +594,35 @@ export const EstudianteProyectos: React.FC = () => {
                 <div 
                   key={p.id} 
                   onClick={() => seleccionarProyectoYCargarActividades(p)}
-                  onDoubleClick={() => seleccionarProyectoYCargarActividades(p)}
-                  className={`bg-white p-5 rounded-2xl border transition cursor-pointer shadow-xs space-y-3.5 select-none ${
+                  className={`bg-white p-4 sm:p-5 rounded-2xl border transition cursor-pointer shadow-xs space-y-3.5 select-none w-full box-border ${
                     isSelected 
                       ? 'border-black ring-2 ring-black/10 shadow-md bg-slate-50/50' 
                       : 'border-gray-100 hover:border-gray-300'
                   }`}
-                  title="Haz clic para ver el detalle rápido a la derecha"
+                  title="Haz clic para ver el detalle rápido"
                 >
-                  <div className="flex justify-between items-start gap-3">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div className="min-w-0 flex-1">
-                      <h4 className="font-bold text-gray-900 text-sm truncate">{p.name}</h4>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-bold text-gray-900 text-sm truncate">{p.name}</h4>
+                        <div className="sm:hidden"><Badge label={p.status || 'Activo'} /></div>
+                      </div>
                       <p className="text-xs text-gray-400 font-medium mt-0.5 line-clamp-1">{p.description}</p>
-                      <div className="flex items-center gap-4 text-xs text-gray-400 font-medium mt-2">
+                      <div className="flex items-center gap-3 text-[11px] sm:text-xs text-gray-400 font-medium mt-2 flex-wrap">
                         <span>Fecha: <strong className="text-gray-700">{formatearFechaVista(p.endDate)}</strong></span>
                         <span>Equipo: <strong className="text-gray-700">{p.members?.length || 1} integrantes</strong></span>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2.5 shrink-0">
-                      <Badge label={p.status || 'Activo'} />
+                    <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-gray-50">
+                      <div className="hidden sm:block"><Badge label={p.status || 'Activo'} /></div>
 
                       <button 
                         onClick={(e) => {
                           e.stopPropagation();
                           seleccionarProyectoYCargarActividades(p);
                         }}
-                        className={`flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                        className={`lg:hidden flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
                           isSelected ? 'bg-black text-white' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                         }`}
                       >
@@ -695,111 +662,130 @@ export const EstudianteProyectos: React.FC = () => {
           )}
         </div>
 
+        {/* 🟢 PANEL DE DETALLE FLOTANTE / DRAWER EN MÓVIL Y LATERAL FIJO EN DESKTOP */}
         {selectedProyecto && (
-          <div className="w-full lg:w-[420px] bg-white p-6 md:p-7 rounded-3xl border border-gray-100 shadow-sm shrink-0 space-y-6 lg:sticky lg:top-6">
-            
-            <div className="flex justify-between items-start border-b border-gray-100 pb-4">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DETALLE RÁPIDO</span>
-                <h3 className="font-bold text-gray-900 text-base leading-snug mt-0.5">{selectedProyecto.name}</h3>
-                <p className="text-xs text-gray-500 mt-1 leading-relaxed">{selectedProyecto.description}</p>
-              </div>
-              <button 
-                onClick={() => setSelectedProyecto(null)}
-                className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer"
-              >
-                <X size={16} />
-              </button>
-            </div>
+          <>
+            {/* Fondo oscuro translúcido en móvil al abrir el detalle */}
+            <div 
+              onClick={() => setSelectedProyecto(null)} 
+              className="fixed inset-0 bg-black/30 backdrop-blur-xs z-40 lg:hidden"
+            />
 
-            <div className="space-y-3 text-xs bg-gray-50 p-4 rounded-2xl">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Estado</span>
-                <Badge label={selectedProyecto.status || 'Activo'} />
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Fecha límite</span>
-                <span className="font-bold text-gray-800">{formatearFechaVista(selectedProyecto.endDate)}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Docente asignado</span>
-                <span className="font-bold text-gray-800 truncate max-w-[200px]">
-                  {selectedProyecto.evaluators?.[0]?.name || 'Sin asignar'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Equipo</span>
-                <span className="font-bold text-gray-800">{selectedProyecto.members?.length || 1} integrantes</span>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-100 pt-5 space-y-3">
-              <div className="flex justify-between items-center">
-                <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Actividades recientes</h4>
-                <button
-                  onClick={() => navigate(`/estudiante-actividades?projectId=${selectedProyecto.id}`)}
-                  className="text-[10px] font-bold text-gray-500 hover:text-black transition underline cursor-pointer"
-                >
-                  Ver todas
-                </button>
-              </div>
-
-              <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-                {cargandoActividades ? (
-                  <p className="text-[11px] text-gray-400 italic text-center py-4">Cargando...</p>
-                ) : actividadesProyecto.length > 0 ? (
-                  actividadesProyecto.map(act => (
-                    <div 
-                      key={act.id} 
-                      onClick={() => navigate(`/estudiante-actividades?id=${act.id}`)}
-                      className="p-3.5 bg-white border border-gray-100 hover:border-gray-300 rounded-2xl text-xs shadow-xs flex justify-between items-center transition cursor-pointer group"
-                    >
-                      <span className="font-bold text-gray-800 group-hover:text-black truncate pr-2">{act.name}</span>
-                      <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 bg-gray-100 rounded-lg text-gray-700 shrink-0">
-                        {act.status}
-                      </span>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-[11px] text-gray-400 italic text-center py-4 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                    No hay actividades registradas.
-                  </p>
-                )}
-              </div>
-            </div>
-
-            <div className="pt-3 space-y-2.5 border-t border-gray-100">
-              <button 
-                onClick={() => {
-                  if (selectedProyecto?.id) {
-                    navigate(`/estudiante-kanban?projectId=${selectedProyecto.id}`);
-                  } else {
-                    navigate('/estudiante-kanban');
-                  }
-                }}
-                className="w-full py-2.5 bg-black text-white rounded-xl text-xs font-semibold hover:bg-gray-900 transition cursor-pointer shadow-xs"
-              >
-                Ir al tablero Kanban
-              </button>
+            <div className="fixed inset-x-4 bottom-4 top-20 sm:inset-auto sm:right-6 sm:top-24 sm:w-[420px] sm:max-h-[85vh] bg-white p-5 sm:p-6 md:p-7 rounded-3xl border border-gray-100 shadow-2xl z-50 space-y-6 overflow-y-auto box-border lg:sticky lg:top-6 lg:inset-auto lg:z-10 lg:shadow-sm">
               
-              <div className="flex gap-2">
+              <div className="flex justify-between items-start border-b border-gray-100 pb-4 gap-2">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">DETALLE RÁPIDO</span>
+                  <h3 className="font-bold text-gray-900 text-base leading-snug mt-0.5 break-words">{selectedProyecto.name}</h3>
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed break-words">{selectedProyecto.description}</p>
+                </div>
                 <button 
-                  onClick={() => abrirEditar(selectedProyecto)}
-                  className="flex-1 py-2.5 bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200/60"
+                  onClick={() => setSelectedProyecto(null)}
+                  className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-xl transition cursor-pointer shrink-0"
                 >
-                  <Edit2 size={13} /> Editar proyecto
-                </button>
-                <button 
-                  onClick={() => eliminarProyecto(selectedProyecto.id)}
-                  className="px-3.5 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-semibold hover:bg-red-100 transition flex items-center justify-center gap-1 cursor-pointer"
-                  title="Eliminar proyecto"
-                >
-                  <Trash2 size={14} />
+                  <X size={16} />
                 </button>
               </div>
-            </div>
 
-          </div>
+              <div className="space-y-3 text-xs bg-gray-50 p-4 rounded-2xl">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">Estado</span>
+                  <Badge label={selectedProyecto.status || 'Activo'} />
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">Creado el</span>
+                  <span className="font-bold text-gray-800">
+                    {formatearFechaVista(selectedProyecto.createdAt || selectedProyecto.startDate)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">Fecha límite</span>
+                  <span className="font-bold text-gray-800">{formatearFechaVista(selectedProyecto.endDate)}</span>
+                </div>
+
+                <div className="flex justify-between items-center gap-2">
+                  <span className="text-gray-400 font-medium shrink-0">Docente asignado</span>
+                  <span className="font-bold text-gray-800 truncate text-right">
+                    {selectedProyecto.evaluators?.[0]?.name || 'Sin asignar'}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">Equipo</span>
+                  <span className="font-bold text-gray-800">{selectedProyecto.members?.length || 1} integrantes</span>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100 pt-5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider">Actividades recientes</h4>
+                  <button
+                    onClick={() => navigate(`/estudiante-actividades?projectId=${selectedProyecto.id}`)}
+                    className="text-[10px] font-bold text-gray-500 hover:text-black transition underline cursor-pointer"
+                  >
+                    Ver todas
+                  </button>
+                </div>
+
+                <div className="space-y-2.5 max-h-48 overflow-y-auto pr-1">
+                  {cargandoActividades ? (
+                    <p className="text-[11px] text-gray-400 italic text-center py-4">Cargando...</p>
+                  ) : actividadesProyecto.length > 0 ? (
+                    actividadesProyecto.map(act => (
+                      <div 
+                        key={act.id} 
+                        onClick={() => navigate(`/estudiante-actividades?id=${act.id}`)}
+                        className="p-3.5 bg-white border border-gray-100 hover:border-gray-300 rounded-2xl text-xs shadow-xs flex justify-between items-center transition cursor-pointer group gap-2"
+                      >
+                        <span className="font-bold text-gray-800 group-hover:text-black truncate pr-1">{act.name}</span>
+                        <span className="text-[10px] font-extrabold uppercase px-2 py-1 bg-gray-100 rounded-lg text-gray-700 shrink-0">
+                          {act.status}
+                        </span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-[11px] text-gray-400 italic text-center py-4 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                      No hay actividades registradas.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="pt-3 space-y-2.5 border-t border-gray-100">
+                <button 
+                  onClick={() => {
+                    if (selectedProyecto?.id) {
+                      navigate(`/estudiante-kanban?projectId=${selectedProyecto.id}`);
+                    } else {
+                      navigate('/estudiante-kanban');
+                    }
+                  }}
+                  className="w-full py-2.5 bg-black text-white rounded-xl text-xs font-semibold hover:bg-gray-900 transition cursor-pointer shadow-xs"
+                >
+                  Ir al tablero Kanban
+                </button>
+                
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => abrirEditar(selectedProyecto)}
+                    className="flex-1 py-2.5 bg-gray-50 text-gray-700 rounded-xl text-xs font-semibold hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer border border-gray-200/60"
+                  >
+                    <Edit2 size={13} /> Editar proyecto
+                  </button>
+                  <button 
+                    onClick={() => eliminarProyecto(selectedProyecto.id)}
+                    className="px-3.5 py-2.5 bg-red-50 text-red-600 rounded-xl text-xs font-semibold hover:bg-red-100 transition flex items-center justify-center gap-1 cursor-pointer shrink-0"
+                    title="Eliminar proyecto"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </>
         )}
       </div>
     </div>
