@@ -3,10 +3,9 @@ import {
   Package, Clock, Eye, CheckCircle2, Search, FileText, Upload, Trash2, Paperclip, Link as LinkIcon 
 } from 'lucide-react';
 
-import { API_BASE_URL, SERVER_URL } from './config/apis';   // ← ojo: "./" no "../" porque este archivo vive en src/, no en src/components/
+import { API_BASE_URL, SERVER_URL } from './config/api';
 
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
-// Elimina la línea "const SERVER_URL = ..." — ya viene del import
 
 type EstadoEntrega = "Pendiente" | "En Revisión" | "Aprobado" | "Completada";
 
@@ -34,6 +33,17 @@ function StatCard({ label, value, color, icon }: { label: string; value: number;
   );
 }
 
+function getUserNameFromStorage() {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return 'Estudiante';
+    const user = JSON.parse(userStr);
+    return user.name || 'Estudiante';
+  } catch {
+    return 'Estudiante';
+  }
+}
+
 export const EstudianteEntregas: React.FC = () => {
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null);
@@ -46,10 +56,15 @@ export const EstudianteEntregas: React.FC = () => {
   const [linkInput, setLinkInput] = useState("");
   const [entregaTargetId, setEntregaTargetId] = useState<string | null>(null);
   const [subiendo, setSubiendo] = useState(false);
+  
+  // 🟢 Nuevos estados para validación y éxito del modal
+  const [linkError, setLinkError] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const nombreEstudiante = getUserNameFromStorage();
 
-const fetchEntregasReal = async () => {
+  const fetchEntregasReal = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
@@ -67,7 +82,6 @@ const fetchEntregasReal = async () => {
           if (a.status === "APPROVED" || a.status === "Aprobado") st = "Aprobado";
           if (a.status === "DONE" || a.status === "Completado" || a.status === "Completada") st = "Completada";
 
-          // 🟢 Lee las evidencias directamente del backend de forma unificada
           const listaEvidencias = a.evidence || a.evidencias || [];
           const evidenciasLimpias = listaEvidencias
             .filter((e: any) => e && (e.url || e.contenido) && !String(e.url || e.contenido).includes('undefined'))
@@ -143,6 +157,8 @@ const fetchEntregasReal = async () => {
   const abrirModalSubida = (entregaId: string) => {
     setEntregaTargetId(entregaId);
     setLinkInput("");
+    setLinkError("");     // Limpiar errores previos
+    setSuccessMsg("");    // Limpiar mensajes previos
     setActiveTab("file");
     setModalOpen(true);
   };
@@ -173,8 +189,24 @@ const fetchEntregasReal = async () => {
     }
   };
 
+  // 🟢 Validación estricta de URL y mensaje de éxito
   const handleGuardarLink = async () => {
-    if (!linkInput.trim() || !entregaTargetId) return;
+    setLinkError("");
+    const url = linkInput.trim();
+
+    if (!url) {
+      setLinkError("El enlace no puede estar vacío.");
+      return;
+    }
+
+    try {
+      new URL(url); // Si no es un enlace válido, esto lanza un error que atrapa el catch
+    } catch (_) {
+      setLinkError("Ingresa un enlace web válido (ej. https://drive.google.com/...)");
+      return;
+    }
+
+    if (!entregaTargetId) return;
 
     try {
       const token = localStorage.getItem("token");
@@ -184,18 +216,21 @@ const fetchEntregasReal = async () => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`
         },
-        body: JSON.stringify({ url: linkInput.trim() })
+        body: JSON.stringify({ url })
       });
 
       if (res.ok) {
         await fetchEntregasReal();
+        setSuccessMsg("¡Enlace guardado correctamente!");
+        setTimeout(() => {
+          setModalOpen(false);
+        }, 2000);
       } else {
-        alert("Error al guardar el enlace.");
+        setLinkError("Error al guardar el enlace en el servidor.");
       }
     } catch (err) {
       console.error("Error al guardar link:", err);
-    } finally {
-      setModalOpen(false);
+      setLinkError("Falla de conexión con el servidor.");
     }
   };
 
@@ -217,6 +252,10 @@ const fetchEntregasReal = async () => {
 
       if (res.ok) {
         await fetchEntregasReal();
+        setSuccessMsg("¡Archivo subido correctamente!");
+        setTimeout(() => {
+          setModalOpen(false);
+        }, 2000);
       } else {
         const err = await res.json().catch(() => ({}));
         alert(err.message || "Error al subir el archivo.");
@@ -226,7 +265,6 @@ const fetchEntregasReal = async () => {
     } finally {
       setSubiendo(false);
       if (e.target) e.target.value = '';
-      setModalOpen(false);
     }
   };
 
@@ -265,7 +303,7 @@ const fetchEntregasReal = async () => {
 
       <div>
         <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Entregas</h1>
-        <p className="text-xs text-gray-400 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
+        <p className="text-xs text-gray-400 font-medium mt-0.5">{nombreEstudiante}</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">
@@ -456,10 +494,11 @@ const fetchEntregasReal = async () => {
             <h3 className="text-sm font-bold text-gray-900 uppercase">Adjuntar Evidencia</h3>
             <p className="text-xs text-gray-400">Selecciona el tipo de entrega que deseas registrar.</p>
 
+            {/* PESTAÑAS */}
             <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
               <button
                 type="button"
-                onClick={() => setActiveTab("file")}
+                onClick={() => { setActiveTab("file"); setSuccessMsg(""); }}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
                   activeTab === "file" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900"
                 }`}
@@ -468,7 +507,7 @@ const fetchEntregasReal = async () => {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab("link")}
+                onClick={() => { setActiveTab("link"); setSuccessMsg(""); }}
                 className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
                   activeTab === "link" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900"
                 }`}
@@ -477,50 +516,68 @@ const fetchEntregasReal = async () => {
               </button>
             </div>
 
-            {activeTab === "file" && (
-              <div className="space-y-3 py-2 text-center">
-                <div 
-                  onClick={() => !subiendo && fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-200 hover:border-gray-400 p-6 rounded-2xl cursor-pointer transition flex flex-col items-center gap-2 bg-gray-50/50"
-                >
-                  <Upload size={24} className="text-gray-400" />
-                  <p className="text-xs font-bold text-gray-700">
-                    {subiendo ? "Subiendo archivo..." : "Haz clic aquí para examinar tus archivos"}
-                  </p>
-                  <p className="text-[10px] text-gray-400">Formatos soportados: PDF, DOCX, PNG, ZIP</p>
-                </div>
+            {/* MENSAJE DE ÉXITO VISUAL */}
+            {successMsg ? (
+              <div className="py-8 flex flex-col items-center justify-center space-y-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                <CheckCircle2 size={32} className="text-emerald-500" />
+                <p className="text-sm font-bold text-emerald-700">{successMsg}</p>
               </div>
+            ) : (
+              <>
+                {activeTab === "file" && (
+                  <div className="space-y-3 py-2 text-center">
+                    <div 
+                      onClick={() => !subiendo && fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-gray-200 hover:border-gray-400 p-6 rounded-2xl cursor-pointer transition flex flex-col items-center gap-2 bg-gray-50/50"
+                    >
+                      <Upload size={24} className="text-gray-400" />
+                      <p className="text-xs font-bold text-gray-700">
+                        {subiendo ? "Subiendo archivo..." : "Haz clic aquí para examinar tus archivos"}
+                      </p>
+                      <p className="text-[10px] text-gray-400">Formatos soportados: PDF, DOCX, PNG, ZIP</p>
+                    </div>
+                  </div>
+                )}
+
+                {activeTab === "link" && (
+                  <div className="space-y-3 py-2">
+                    <label className="block text-xs font-bold text-gray-700">Enlace URL *</label>
+                    <input 
+                      type="url"
+                      placeholder="https://drive.google.com/..."
+                      value={linkInput}
+                      onChange={e => {
+                        setLinkInput(e.target.value);
+                        setLinkError(""); // Quita el error al escribir
+                      }}
+                      className={`w-full p-2.5 bg-gray-50 border ${linkError ? 'border-red-500' : 'border-gray-200'} rounded-xl text-xs font-medium focus:outline-none focus:bg-white`}
+                    />
+                    {linkError && <p className="text-red-500 text-xs font-semibold">{linkError}</p>}
+                    
+                    <button
+                      type="button"
+                      onClick={handleGuardarLink}
+                      className="w-full py-2.5 bg-black text-white rounded-xl text-xs font-bold hover:bg-gray-900 transition mt-2"
+                    >
+                      Guardar enlace
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
-            {activeTab === "link" && (
-              <div className="space-y-3 py-2">
-                <label className="block text-xs font-bold text-gray-700">Enlace URL *</label>
-                <input 
-                  type="url"
-                  placeholder="https://drive.google.com/... o https://figma.com/..."
-                  value={linkInput}
-                  onChange={e => setLinkInput(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:bg-white"
-                />
-                <button
+            {/* BOTÓN CANCELAR */}
+            {!successMsg && (
+              <div className="flex justify-end pt-2 border-t border-gray-50">
+                <button 
                   type="button"
-                  onClick={handleGuardarLink}
-                  className="w-full py-2.5 bg-black text-white rounded-xl text-xs font-bold hover:bg-gray-900 transition"
+                  onClick={() => setModalOpen(false)}
+                  className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition"
                 >
-                  Guardar enlace
+                  Cancelar
                 </button>
               </div>
             )}
-
-            <div className="flex justify-end pt-2 border-t border-gray-50">
-              <button 
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition"
-              >
-                Cancelar
-              </button>
-            </div>
           </div>
         </div>
       )}

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   Folder, 
+  LayoutGrid,     // ← nuevo ícono para Kanban
   SquareCheckBig, 
   User, 
   LogOut 
@@ -11,63 +12,59 @@ import {
 export const SidebarEvaluador: React.FC = () => {
   const location = useLocation();
 
-  // Función auxiliar para saber qué pestaña resaltar
   const isActive = (path: string) => location.pathname === path;
 
-  // Estilos de Tailwind para el modo claro del Evaluador (según Figma)
   const estiluEnlace = (path: string) => `
-    flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] transition-all font-medium cursor-pointer
+    flex items-center gap-3 px-3 py-2.5 rounded-xl text-[14px] transition-all font-medium
     ${isActive(path) 
-      ? 'bg-blue-50/80 text-blue-600 font-semibold' 
+      ? 'bg-blue-50/80 text-blue-600 font-semibold shadow-sm shadow-blue-50/30' 
       : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}
   `;
 
   return (
-    <div className="w-full h-full bg-white flex flex-col p-4 justify-between border-r border-gray-100">
-      
-      {/* SECCIÓN SUPERIOR: Logo y Enlaces de Navegación */}
+    <div className="w-full flex flex-col p-4 bg-white">
       <div className="space-y-6">
-        {/* Logo o Título */}
-        <div className="flex items-center gap-2 px-2 py-2">
-          <span className="text-gray-900 font-bold text-base tracking-wide">ClassBoard</span>
+        <div className="hidden md:flex items-center gap-3 px-3 py-4">
+          <div className="w-8 h-8 bg-[#2563EB] text-white flex items-center justify-center rounded-lg font-bold text-sm">
+            <LayoutDashboard size={14} />
+          </div>
+          <span className="text-lg font-bold tracking-tight text-gray-900">ClassBoard</span>
         </div>
 
-        {/* Menú de navegación del Evaluador */}
-        <nav className="space-y-1.5">
+        <nav className="space-y-1">
           <Link to="/evaluador-dashboard" className={estiluEnlace('/evaluador-dashboard')}>
-            <LayoutDashboard size={18} />
+            <LayoutDashboard size={18} className={isActive('/evaluador-dashboard') ? 'text-blue-600' : 'text-gray-400'} /> 
             Dashboard
           </Link>
+          
           <Link to="/evaluador-proyectos" className={estiluEnlace('/evaluador-proyectos')}>
-            <Folder size={18} />
+            <Folder size={18} className={isActive('/evaluador-proyectos') ? 'text-blue-600' : 'text-gray-400'} /> 
             Proyectos asignados
           </Link>
+
+          {/* 🟢 NUEVO: Tablero Kanban */}
+          <Link to="/evaluador-kanban" className={estiluEnlace('/evaluador-kanban')}>
+            <LayoutGrid size={18} className={isActive('/evaluador-kanban') ? 'text-blue-600' : 'text-gray-400'} /> 
+            Tablero Kanban
+          </Link>
+          
           <Link to="/evaluador-evaluaciones" className={estiluEnlace('/evaluador-evaluaciones')}>
-            <SquareCheckBig size={18} />
+            <SquareCheckBig size={18} className={isActive('/evaluador-evaluaciones') ? 'text-blue-600' : 'text-gray-400'} /> 
             Evaluaciones
           </Link>
+          
           <Link to="/evaluador-perfil" className={estiluEnlace('/evaluador-perfil')}>
-            <User size={18} />
+            <User size={18} className={isActive('/evaluador-perfil') ? 'text-blue-600' : 'text-gray-400'} /> 
             Mi perfil
           </Link>
         </nav>
       </div>
 
-      {/* SECCIÓN INFERIOR: Botón de Cerrar sesión anclado al fondo */}
-      <div className="pt-4 border-t border-gray-100 mt-auto">
-        <button 
-          onClick={() => {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
-          }}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-50 transition text-xs font-semibold cursor-pointer"
-        >
-          <LogOut size={16} />
-          Cerrar sesión
-        </button>
+      <div className="pt-4 mt-6 border-t border-gray-50">
+        <Link to="/login" className="flex items-center gap-3 px-3 py-2.5 w-full rounded-xl text-gray-400 hover:bg-red-50 hover:text-red-500 text-[14px] transition-colors font-medium">
+          <LogOut size={18} /> Cerrar sesión
+        </Link>
       </div>
-
     </div>
   );
 };

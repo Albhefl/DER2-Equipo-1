@@ -7,32 +7,29 @@ type Responsable = { user: Miembro };
 export type ActividadGrafico = {
   id: string;
   assignees?: Responsable[];
+  projectId?: string | null;
 };
 
 interface Props {
   actividades: ActividadGrafico[];
-  miembrosEquipo?: Miembro[];
+  miembrosEquipo?: Miembro[]; // Opcional o se puede omitir si filtramos por asignaciones directas del proyecto
 }
 
-export const GraficoActividadesResponsables: React.FC<Props> = ({ actividades, miembrosEquipo = [] }) => {
-  // 1. Agrupar la carga de trabajo por responsable
+export const GraficoActividadesResponsables: React.FC<Props> = ({ actividades }) => {
+  // 1. Agrupar la carga de trabajo exclusivamente por los responsables presentes en las actividades del proyecto actual
   const mapaConteo: Record<string, { nombre: string; total: number }> = {};
-
-  // Inicializar miembros del equipo
-  miembrosEquipo.forEach(m => {
-    mapaConteo[m.id] = { nombre: m.name, total: 0 };
-  });
 
   let sinAsignarCount = 0;
 
-  // Contabilizar actividades asignadas
+  // Contabilizar actividades asignadas filtrando estrictamente al proyecto visible
   actividades.forEach(act => {
     if (!act.assignees || act.assignees.length === 0) {
       sinAsignarCount++;
     } else {
       act.assignees.forEach(r => {
+        if (!r.user || !r.user.id) return;
         if (!mapaConteo[r.user.id]) {
-          mapaConteo[r.user.id] = { nombre: r.user.name, total: 0 };
+          mapaConteo[r.user.id] = { nombre: r.user.name || 'Usuario', total: 0 };
         }
         mapaConteo[r.user.id].total += 1;
       });
@@ -60,7 +57,7 @@ export const GraficoActividadesResponsables: React.FC<Props> = ({ actividades, m
               Carga de trabajo por responsable
             </h3>
             <p className="text-[11px] text-gray-400 font-medium">
-              Distribución de actividades entre el equipo
+              Distribución de actividades entre el equipo del proyecto
             </p>
           </div>
         </div>
@@ -68,7 +65,7 @@ export const GraficoActividadesResponsables: React.FC<Props> = ({ actividades, m
 
       {datos.length === 0 || totalActividadesGlobal === 0 ? (
         <div className="py-8 text-center text-xs text-gray-400 font-medium border border-dashed border-gray-100 rounded-xl">
-          No hay actividades registradas para mostrar el gráfico.
+          No hay actividades registradas para mostrar el gráfico en este proyecto.
         </div>
       ) : (
         <div className="space-y-3 pt-1">

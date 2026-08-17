@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter, FolderOpen, AlertCircle } from 'lucide-react';
 import { ProgressBar } from './ProgressBar';
-import { API_BASE_URL } from '../config/apis';   // ← agregar esta línea
+import { API_BASE_URL } from '../config/api';
 
-const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;   // ← cambiar esta línea
-const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;         // ← cambiar esta línea
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
+const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;
+const API_PROYECTOS_URL = `${API_BASE_URL}/actividades/proyectos`;
 
 type EstadoActividad = "PENDING" | "IN_PROCESS" | "IN_REVIEW" | "DONE";
 type PrioridadActividad = "HIGH" | "MED" | "LOW";
@@ -23,6 +24,7 @@ const PRIORIDAD_LABELS: Record<PrioridadActividad, string> = { HIGH: "Alta", MED
 
 type Miembro = { id: string; name: string; email: string };
 type Responsable = { user: Miembro };
+type ProyectoSimple = { id: string; name: string };
 
 type Actividad = {
   id: string;
@@ -32,6 +34,7 @@ type Actividad = {
   status: EstadoActividad;
   priority?: PrioridadActividad;
   projectId?: string | null;
+  project?: ProyectoSimple | null;
   assignees: Responsable[];
 };
 
@@ -101,12 +104,15 @@ function mergeMiembros(previos: Miembro[], nuevos: Miembro[]): Miembro[] {
 
 export const EstudianteKanban: React.FC = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const projectIdParam = searchParams.get("projectId");
 
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorCarga, setErrorCarga] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+
+  const [proyectos, setProyectos] = useState<ProyectoSimple[]>([]);
 
   const [filtroResponsable, setFiltroResponsable] = useState("");
   const [filtroPrioridad, setFiltroPrioridad] = useState("");
@@ -122,6 +128,69 @@ export const EstudianteKanban: React.FC = () => {
   const [miembrosEquipo, setMiembrosEquipo] = useState<Miembro[]>([]);
   const [miembroSeleccionado, setMiembroSeleccionado] = useState("");
   const [asignando, setAsignando] = useState(false);
+
+  // --- Drag & drop MANUAL (pointer events), sin usar la API nativa de HTML5 DnD ---
+  // La API nativa (draggable + dataTransfer) delega en el sistema operativo para
+  // generar la imagen de arrastre, y en ciertos equipos/extensiones/entornos
+  // remotos eso puede colgar el navegador entero justo al iniciar el drag.
+  // Con pointer events todo el arrastre se resuelve en JS puro, sin tocar el OS.
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<EstadoActividad | null>(null);
+  const [dragErrorMsg, setDragErrorMsg] = useState<string | null>(null);
+
+  const handleCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, card: Actividad) => {
+    // No iniciar arrastre si el clic empezó en un botón (editar/eliminar)
+    if ((e.target as HTMLElement).closest("button")) return;
+    if (e.button !== undefined && e.button !== 0) return; // solo clic izquierdo / touch
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      // Si el navegador no soporta pointer capture en este contexto, seguimos igual
+    }
+    setDraggingId(card.id);
+    setDropTarget(null);
+  };
+
+  const handleCardPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingId) return;
+    const elAbajo = document.elementFromPoint(e.clientX, e.clientY);
+    const columna = elAbajo?.closest("[data-kanban-col]") as HTMLElement | null;
+    const estadoDetectado = (columna?.dataset.kanbanCol as EstadoActividad | undefined) || null;
+    setDropTarget(prev => (prev === estadoDetectado ? prev : estadoDetectado));
+  };
+
+  const finalizarArrastre = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!draggingId) return;
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {
+      // no-op
+    }
+    const id = draggingId;
+    const destino = dropTarget;
+    setDraggingId(null);
+    setDropTarget(null);
+    if (destino) {
+      cambiarEstadoActividad(id, destino);
+    }
+  };
+
+  // Red de seguridad: si algo deja el arrastre "atorado", Escape lo cancela
+  useEffect(() => {
+    if (!draggingId) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setDraggingId(null);
+        setDropTarget(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [draggingId]);
+
+  // --- Confirmación de borrado no bloqueante (reemplaza confirm()) ---
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [eliminando, setEliminando] = useState(false);
 
   const fetchActividades = async () => {
     setLoading(true);
@@ -154,6 +223,27 @@ export const EstudianteKanban: React.FC = () => {
     };
     fetchMiembros();
   }, []);
+
+  useEffect(() => {
+    const fetchProyectos = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch(API_PROYECTOS_URL, { headers: { Authorization: `Bearer ${token}` } });
+        const data = await response.json();
+        if (response.ok) setProyectos(data.proyectos || []);
+      } catch (err) {
+        console.error("Error al cargar proyectos:", err);
+      }
+    };
+    fetchProyectos();
+  }, []);
+
+  // Auto-ocultar el banner de error de drag después de unos segundos
+  useEffect(() => {
+    if (!dragErrorMsg) return;
+    const t = setTimeout(() => setDragErrorMsg(null), 6000);
+    return () => clearTimeout(t);
+  }, [dragErrorMsg]);
 
   const responsablesDisponibles = mergeMiembros([], actividades.flatMap(a => a.assignees.map(r => r.user)));
 
@@ -201,6 +291,38 @@ export const EstudianteKanban: React.FC = () => {
       setErrorGuardar(err.message || "Error de conexión con el servidor.");
     } finally {
       setGuardando(false);
+    }
+  };
+
+  // 🟢 Función de cambio de estado optimista (actualiza UI al instante y luego el servidor)
+  const cambiarEstadoActividad = async (id: string, nuevoEstado: EstadoActividad) => {
+    const actividadOriginal = actividades.find(a => a.id === id);
+    if (!actividadOriginal || actividadOriginal.status === nuevoEstado) return;
+
+    // Actualización visual inmediata para evitar bloqueos
+    setActividades(prev => prev.map(a => a.id === id ? { ...a, status: nuevoEstado } : a));
+
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_ACTIVIDADES_URL}/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          nombre: actividadOriginal.name,
+          descripcion: actividadOriginal.description || "",
+          fecha_limite: actividadOriginal.deadline.split("T")[0],
+          estado: nuevoEstado,
+          prioridad: actividadOriginal.priority || "MED",
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "No se pudo actualizar el estado.");
+      setActividades(prev => prev.map(a => (a.id === data.actividad.id ? data.actividad : a)));
+    } catch (err: any) {
+      // ⚠️ Antes: alert(...) — bloqueaba el hilo de JS (y en iframes/preview
+      // sandboxed ni siquiera muestra el diálogo, dejando la pantalla "congelada").
+      setDragErrorMsg(err.message || "No se pudo mover la tarjeta. Se restauró el estado original.");
+      fetchActividades(); // Recargar datos originales si falla
     }
   };
 
@@ -275,15 +397,24 @@ export const EstudianteKanban: React.FC = () => {
     }
   };
 
-  const removeCard = async (id: string) => {
-    if (!confirm("¿Eliminar esta actividad? Esta acción no se puede deshacer.")) return;
+  // El botón de la tarjeta ahora solo abre la confirmación (no bloquea el hilo)
+  const removeCard = (id: string) => {
+    setPendingDeleteId(id);
+  };
+
+  const confirmarEliminar = async () => {
+    if (!pendingDeleteId) return;
+    setEliminando(true);
     try {
       const token = localStorage.getItem("token");
-      const response = await fetch(`${API_ACTIVIDADES_URL}/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const response = await fetch(`${API_ACTIVIDADES_URL}/${pendingDeleteId}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) throw new Error("No se pudo eliminar la actividad.");
-      setActividades(prev => prev.filter(a => a.id !== id));
+      setActividades(prev => prev.filter(a => a.id !== pendingDeleteId));
+      setPendingDeleteId(null);
     } catch (err: any) {
-      alert(err.message || "Error de conexión con el servidor.");
+      setDragErrorMsg(err.message || "Error de conexión con el servidor.");
+    } finally {
+      setEliminando(false);
     }
   };
 
@@ -291,20 +422,25 @@ export const EstudianteKanban: React.FC = () => {
     ? miembrosEquipo.filter(m => !editModal.assignees.some(r => r.user.id === m.id))
     : [];
 
-  // 🟢 HU-030: Cálculo dinámico de actividades del proyecto
   const actividadesVisibles = actividades.filter(a => !projectIdParam || a.projectId === projectIdParam);
   const totalActividadesProyecto = actividadesVisibles.length;
   const completadasActividadesProyecto = actividadesVisibles.filter(a => a.status === 'DONE').length;
 
+  const proyectoActivo = proyectos.find(p => p.id === projectIdParam);
+
+  const handleFiltroProyectoChange = (val: string) => {
+    navigate(val ? `/estudiante-kanban?projectId=${val}` : "/estudiante-kanban");
+  };
+
   return (
     <div className="w-full max-w-full space-y-6 box-border">
-      
+
       {/* ENCABEZADO Y FILTROS */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tablero Kanban</h1>
           <p className="text-sm text-gray-500 font-medium mt-0.5">
-            {projectIdParam ? "Filtrado por proyecto seleccionado" : "Proyecto: ClassBoard Equipo A"}
+            {proyectoActivo ? `Proyecto: ${proyectoActivo.name}` : "Mostrando actividades de todos tus proyectos"}
           </p>
         </div>
 
@@ -317,6 +453,18 @@ export const EstudianteKanban: React.FC = () => {
               placeholder="Buscar tarjeta..."
               className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40"
             />
+          </div>
+
+          <div className="relative w-full sm:w-44">
+            <FolderOpen size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+            <select
+              value={projectIdParam || ""}
+              onChange={e => handleFiltroProyectoChange(e.target.value)}
+              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40 cursor-pointer"
+            >
+              <option value="">Todos los proyectos</option>
+              {proyectos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </div>
 
           <div className="relative w-full sm:w-40">
@@ -358,14 +506,15 @@ export const EstudianteKanban: React.FC = () => {
             </select>
           </div>
 
-          {(filtroResponsable || filtroPrioridad) && (
+          {(filtroResponsable || filtroPrioridad || projectIdParam) && (
             <button
               type="button"
               onClick={() => {
                 setFiltroResponsable("");
                 setFiltroPrioridad("");
+                navigate("/estudiante-kanban");
               }}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shrink-0"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shrink-0 cursor-pointer"
             >
               <X size={13} /> Limpiar filtros
             </button>
@@ -373,7 +522,7 @@ export const EstudianteKanban: React.FC = () => {
         </div>
       </div>
 
-      {/* 🟢 HU-030: BARRA DE PROGRESO GENERAL DEL PROYECTO */}
+      {/* BARRA DE PROGRESO GENERAL */}
       {!loading && !errorCarga && (
         <ProgressBar
           totalActividades={totalActividadesProyecto}
@@ -381,7 +530,7 @@ export const EstudianteKanban: React.FC = () => {
         />
       )}
 
-      {/* TABLERO KANBAN */}
+      {/* TABLERO KANBAN INTERACTIVO */}
       {loading ? (
         <div className="text-center py-10 text-xs text-gray-400 font-medium">Cargando tablero...</div>
       ) : errorCarga ? (
@@ -393,6 +542,7 @@ export const EstudianteKanban: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 w-full items-start box-border">
             {ESTADOS.map(estado => {
               const style = columnStyle(estado);
+              const esDropTarget = dropTarget === estado;
 
               const filteredCards = actividades
                 .filter(a =>
@@ -410,7 +560,11 @@ export const EstudianteKanban: React.FC = () => {
                 });
 
               return (
-                <div key={estado} className={`flex flex-col rounded-2xl border ${style.border} bg-white shadow-sm shadow-gray-100/30 overflow-hidden w-full`}>
+                <div
+                  key={estado}
+                  data-kanban-col={estado}
+                  className={`flex flex-col rounded-2xl border ${style.border} bg-white shadow-sm shadow-gray-100/30 overflow-hidden w-full transition-shadow ${esDropTarget ? "ring-2 ring-blue-300 shadow-md" : ""}`}
+                >
                   <div className={`px-4 py-3 flex items-center justify-between border-b border-inherit ${style.header}`}>
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${style.dot}`} />
@@ -419,61 +573,77 @@ export const EstudianteKanban: React.FC = () => {
                     <span className="text-xs font-bold bg-white border border-inherit px-2 py-0.5 rounded-full text-gray-500 shadow-sm">{filteredCards.length}</span>
                   </div>
 
-                  <div className="p-3 flex flex-col gap-3 min-h-37.5 max-h-125 overflow-y-auto bg-gray-50/30">
+                  <div className="p-3 flex flex-col gap-3 min-h-[300px] max-h-125 overflow-y-auto bg-gray-50/30">
                     {filteredCards.map(card => {
                       const venc = calcularVencimiento(card.deadline, card.status);
                       const estilosVenc = vencimientoEstilos(venc.color);
+                      const seEstaArrastrando = draggingId === card.id;
                       return (
-                      <div key={card.id} className="bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-all group space-y-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <p className="text-xs font-bold text-gray-800 leading-snug flex-1">{card.name}</p>
-                          <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0">
-                            <button onClick={() => openEdit(card)} className="p-1 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-gray-50 transition-colors">
-                              <Edit2 size={12} />
-                            </button>
-                            <button onClick={() => removeCard(card.id)} className="p-1 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-50 transition-colors">
-                              <X size={12} />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between gap-2 pt-1">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {card.assignees.length > 0 ? (
-                              <>
-                                <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 text-[9px] font-bold flex items-center justify-center shrink-0 border border-blue-100">
-                                  {initials(card.assignees[0].user.name)}
-                                </div>
-                                <span className="text-[11px] text-gray-400 font-semibold truncate">
-                                  {card.assignees.map(r => r.user.name).join(", ")}
+                        <div
+                          key={card.id}
+                          onPointerDown={(e) => handleCardPointerDown(e, card)}
+                          onPointerMove={handleCardPointerMove}
+                          onPointerUp={finalizarArrastre}
+                          onPointerCancel={finalizarArrastre}
+                          style={{ touchAction: "none" }}
+                          className={`bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-all group space-y-3 cursor-grab active:cursor-grabbing select-none ${seEstaArrastrando ? "opacity-40" : "opacity-100"}`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-gray-800 leading-snug">{card.name}</p>
+                              {card.project?.name && (
+                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[9px] font-bold truncate max-w-full">
+                                  {card.project.name}
                                 </span>
-                              </>
-                            ) : (
-                              <span className="text-[11px] text-gray-300 font-semibold italic">Sin asignar</span>
+                              )}
+                            </div>
+                            <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0">
+                              <button onClick={() => openEdit(card)} className="p-1 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" title="Editar tarjeta">
+                                <Edit2 size={12} />
+                              </button>
+                              <button onClick={() => removeCard(card.id)} className="p-1 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" title="Eliminar tarjeta">
+                                <X size={12} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              {card.assignees.length > 0 ? (
+                                <>
+                                  <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 text-[9px] font-bold flex items-center justify-center shrink-0 border border-blue-100">
+                                    {initials(card.assignees[0].user.name)}
+                                  </div>
+                                  <span className="text-[11px] text-gray-400 font-semibold truncate">
+                                    {card.assignees.map(r => r.user.name).join(", ")}
+                                  </span>
+                                </>
+                              ) : (
+                                <span className="text-[11px] text-gray-300 font-semibold italic">Sin asignar</span>
+                              )}
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${priorityBg(card.priority)}`}>
+                              {PRIORIDAD_LABELS[card.priority || "MED"]}
+                            </span>
+                          </div>
+
+                          <div className={`flex items-center gap-1.5 pt-1 border-t border-gray-50 text-[10px] font-bold tracking-tight ${estilosVenc.text}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${estilosVenc.dot}`} />
+                            <Clock size={10} className="shrink-0" />
+                            {new Date(card.deadline).toLocaleDateString("es-MX")}
+                            {venc.vencida && (
+                              <span className="ml-auto px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold uppercase tracking-wide shrink-0">
+                                Vencida
+                              </span>
                             )}
                           </div>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${priorityBg(card.priority)}`}>
-                            {PRIORIDAD_LABELS[card.priority || "MED"]}
-                          </span>
                         </div>
-
-                        <div className={`flex items-center gap-1.5 pt-1 border-t border-gray-50 text-[10px] font-bold tracking-tight ${estilosVenc.text}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${estilosVenc.dot}`} />
-                          <Clock size={10} className="shrink-0" />
-                          {new Date(card.deadline).toLocaleDateString("es-MX")}
-                          {venc.vencida && (
-                            <span className="ml-auto px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[9px] font-bold uppercase tracking-wide shrink-0">
-                              Vencida
-                            </span>
-                          )}
-                        </div>
-                      </div>
                       );
                     })}
 
                     {filteredCards.length === 0 && (
                       <div className="text-center py-6 text-[11px] text-gray-400 font-medium border border-dashed border-gray-200 rounded-xl bg-white/50">
-                        {filtroResponsable || filtroPrioridad ? "Sin actividades para los filtros seleccionados" : "No hay actividades"}
+                        {filtroResponsable || filtroPrioridad ? "Sin actividades para los filtros" : "Arrastra o crea una actividad aquí"}
                       </div>
                     )}
                   </div>
@@ -481,7 +651,7 @@ export const EstudianteKanban: React.FC = () => {
                   <div className="p-2 border-t border-inherit bg-gray-50/50">
                     <button
                       onClick={() => openCreate(estado)}
-                      className="w-full flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-bold text-gray-500 hover:text-blue-600 hover:bg-white border border-transparent hover:border-gray-100 transition-all"
+                      className="w-full flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-bold text-gray-500 hover:text-blue-600 hover:bg-white border border-transparent hover:border-gray-100 transition-all cursor-pointer"
                     >
                       <Plus size={14} /> Agregar actividad
                     </button>
@@ -490,7 +660,7 @@ export const EstudianteKanban: React.FC = () => {
               );
             })}
           </div>
-          <p className="text-xs text-gray-400 font-medium text-center">Despliega o gestiona las actividades usando los controles de estado de cada tarjeta.</p>
+          <p className="text-xs text-gray-400 font-medium text-center pt-2">💡 Tip: Puedes arrastrar y soltar las tarjetas entre columnas para cambiar su estado instantáneamente.</p>
         </>
       )}
 
@@ -500,7 +670,7 @@ export const EstudianteKanban: React.FC = () => {
           <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center border-b border-gray-50 pb-2">
               <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Editar tarjeta</h3>
-              <button onClick={closeEdit} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors">
+              <button onClick={closeEdit} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
                 <X size={16} />
               </button>
             </div>
@@ -538,7 +708,7 @@ export const EstudianteKanban: React.FC = () => {
                   <select
                     value={miembroSeleccionado}
                     onChange={e => setMiembroSeleccionado(e.target.value)}
-                    className="flex-1 min-w-0 p-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+                    className="flex-1 min-w-0 p-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
                   >
                     <option value="">{disponibles.length > 0 ? "Agregar responsable..." : "Sin compañeros disponibles"}</option>
                     {disponibles.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -547,7 +717,7 @@ export const EstudianteKanban: React.FC = () => {
                     type="button"
                     onClick={handleAsignar}
                     disabled={!miembroSeleccionado || asignando}
-                    className="px-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-40 shrink-0"
+                    className="px-2.5 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-40 shrink-0 cursor-pointer"
                   >
                     {asignando ? "..." : "Asignar"}
                   </button>
@@ -559,7 +729,7 @@ export const EstudianteKanban: React.FC = () => {
                 <select
                   value={editDraft.priority}
                   onChange={e => setEditDraft(d => d && ({ ...d, priority: e.target.value as PrioridadActividad }))}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
                 >
                   {(["HIGH", "MED", "LOW"] as PrioridadActividad[]).map(p => <option key={p} value={p}>{PRIORIDAD_LABELS[p]}</option>)}
                 </select>
@@ -570,7 +740,7 @@ export const EstudianteKanban: React.FC = () => {
                   type="date"
                   value={editDraft.deadline}
                   onChange={e => setEditDraft(d => d && ({ ...d, deadline: e.target.value }))}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
                 />
               </div>
               <div>
@@ -578,7 +748,7 @@ export const EstudianteKanban: React.FC = () => {
                 <select
                   value={editDraft.status}
                   onChange={e => setEditDraft(d => d && ({ ...d, status: e.target.value as EstadoActividad }))}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
                 >
                   {ESTADOS.map(s => <option key={s} value={s}>{ESTADO_LABELS[s]}</option>)}
                 </select>
@@ -586,8 +756,8 @@ export const EstudianteKanban: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
-              <button type="button" onClick={closeEdit} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">Cancelar</button>
-              <button type="button" onClick={saveEdit} disabled={guardando} className="px-4 py-2 text-xs font-bold text-white bg-[#0B1026] hover:bg-[#060916] rounded-xl transition-colors shadow-sm disabled:opacity-50">
+              <button type="button" onClick={closeEdit} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer">Cancelar</button>
+              <button type="button" onClick={saveEdit} disabled={guardando} className="px-4 py-2 text-xs font-bold text-white bg-[#0B1026] hover:bg-[#060916] rounded-xl transition-colors shadow-sm disabled:opacity-50 cursor-pointer">
                 {guardando ? "Guardando..." : "Guardar"}
               </button>
             </div>
@@ -604,7 +774,7 @@ export const EstudianteKanban: React.FC = () => {
                 <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Nueva actividad</h3>
                 <p className="text-[11px] text-gray-400 font-medium mt-0.5">Se creará en: {ESTADO_LABELS[createModal]}</p>
               </div>
-              <button onClick={closeCreate} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors">
+              <button onClick={closeCreate} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
                 <X size={16} />
               </button>
             </div>
@@ -636,9 +806,10 @@ export const EstudianteKanban: React.FC = () => {
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha límite</label>
                 <input
                   type="date"
+                  min={new Date().toISOString().split("T")[0]}
                   value={createDraft.deadline}
                   onChange={e => setCreateDraft(d => ({ ...d, deadline: e.target.value }))}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
                 />
               </div>
 
@@ -663,12 +834,58 @@ export const EstudianteKanban: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
-              <button type="button" onClick={closeCreate} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors">Cancelar</button>
-              <button type="button" onClick={saveCreate} disabled={creando} className="px-4 py-2 text-xs font-bold text-white bg-[#0B1026] hover:bg-[#060916] rounded-xl transition-colors shadow-sm disabled:opacity-50">
+              <button type="button" onClick={closeCreate} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer">Cancelar</button>
+              <button type="button" onClick={saveCreate} disabled={creando} className="px-4 py-2 text-xs font-bold text-white bg-[#0B1026] hover:bg-[#060916] rounded-xl transition-colors shadow-sm disabled:opacity-50 cursor-pointer">
                 {creando ? "Creando..." : "Crear actividad"}
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* MODAL CONFIRMAR ELIMINAR (reemplaza confirm() bloqueante) */}
+      {pendingDeleteId && (
+        <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !eliminando && setPendingDeleteId(null)}>
+          <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-xs shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center shrink-0">
+                <AlertCircle size={16} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Eliminar actividad</h3>
+                <p className="text-xs text-gray-500 font-medium mt-1">Esta acción no se puede deshacer. ¿Deseas continuar?</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2.5 pt-2 border-t border-gray-50">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteId(null)}
+                disabled={eliminando}
+                className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarEliminar}
+                disabled={eliminando}
+                className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors shadow-sm disabled:opacity-50 cursor-pointer"
+              >
+                {eliminando ? "Eliminando..." : "Eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BANNER DE ERROR DE DRAG/DELETE (reemplaza alert() bloqueante) */}
+      {dragErrorMsg && (
+        <div className="fixed bottom-4 right-4 max-w-xs bg-white border border-red-200 text-red-600 text-xs font-semibold px-4 py-3 rounded-xl shadow-lg z-[60] flex items-start gap-2">
+          <AlertCircle size={14} className="shrink-0 mt-0.5" />
+          <span className="flex-1">{dragErrorMsg}</span>
+          <button onClick={() => setDragErrorMsg(null)} className="text-red-300 hover:text-red-500 shrink-0 cursor-pointer">
+            <X size={12} />
+          </button>
         </div>
       )}
     </div>

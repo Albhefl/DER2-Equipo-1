@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../config/apis'; 
+import { useNavigate, Link } from 'react-router-dom';
+import { API_BASE_URL } from '../config/api'; 
+
 /**
  * 1. ESQUEMA DE VALIDACIÓN CON ZOD (HU-009.1)
  */
@@ -157,6 +158,7 @@ export const Login: React.FC = () => {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-4 top-1/2 -translate-y-1/2 text-[#687280] hover:text-[#111827] transition-colors"
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -178,11 +180,11 @@ export const Login: React.FC = () => {
             {isSubmitting ? 'Iniciando sesión...' : 'Iniciar sesión'}
           </button>
 
-          {/* SOPORTE DE CUENTA */}
+          {/* SOPORTE DE CUENTA (CORREGIDO) */}
           <div className="text-center pt-1">
-            <a href="#" className="text-[16px] font-regular text-[#111827] hover:underline">
+            <Link to="/recuperar-password" className="text-[16px] font-regular text-[#111827] hover:underline">
               ¿Olvidaste tu contraseña?
-            </a>
+            </Link>
           </div>
 
           {/* DIVISOR INTERMEDIO */}
@@ -197,9 +199,9 @@ export const Login: React.FC = () => {
           {/* REDIRECCIÓN A REGISTRO */}
           <div className="text-center text-[16px] text-[#687280]">
             ¿No tienes una cuenta?{' '}
-            <a href="#" className="text-[#111827] font-semibold hover:underline ml-1">
+            <Link to="/register" className="text-[#111827] font-semibold hover:underline ml-1">
               Registrarse
-            </a>
+            </Link>
           </div>
         </form>
       </div>

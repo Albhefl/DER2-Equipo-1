@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   User, Mail, Phone, Building, FileText, CalendarDays,
-  Upload, ListChecks, CheckCircle2, Package, FolderOpen, Edit2
+  Upload, ListChecks, CheckCircle2, Package, FolderOpen, Edit2, AlertCircle
 } from 'lucide-react';
 
-import { API_BASE_URL } from '../config/apis';   // ← agregar esta línea
+import { API_BASE_URL, SERVER_URL } from '../config/api';
 
-const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;   // ← cambiar esta línea
-const API_PROYECTOS_URL = `${API_BASE_URL}/proyectos`;  
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
+const API_PROYECTOS_URL = `${API_BASE_URL}/proyectos`;
 
 type ProfileData = {
   id?: string;
@@ -19,6 +19,7 @@ type ProfileData = {
   bio: string;
   career: string;
   semester: string;
+  profilePicture?: string;
 };
 
 function initials(name: string) {
@@ -26,10 +27,6 @@ function initials(name: string) {
   return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
-// Tarjeta de métrica -- misma estructura que el Figma (StatCard), usando
-// tokens (bg-card/border-border/text-foreground) para el contenedor y
-// colores Tailwind normales (-100/-600) para el ícono, igual que ya
-// habíamos ajustado antes contra el Figma de "Actividad del proyecto".
 function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
   return (
     <div className="bg-card rounded-xl border border-border p-4 flex items-center gap-3">
@@ -47,43 +44,49 @@ function StatCard({ label, value, color, icon }: { label: string; value: number;
 export const EstudiantePerfil: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [errorSubida, setErrorSubida] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Métricas reales de la API (igual que antes, sin tocar esta parte)
+  // 🟢 NUEVO: el archivo seleccionado se guarda aquí, no se sube todavía
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
   const [totalActividades, setTotalActividades] = useState(0);
   const [completadas, setCompletadas] = useState(0);
   const [totalEntregas, setTotalEntregas] = useState(0);
   const [totalProyectos, setTotalProyectos] = useState(0);
 
   const [profile, setProfile] = useState<ProfileData>({
-    name: "Ana García Pérez",
-    email: "ana.garcia@universidad.edu",
+    name: "Estudiante",
+    email: "",
     role: "Estudiante",
     university: "Universidad Nacional Autónoma",
     phone: "+52 55 1234 5678",
     bio: "Estudiante de Ingeniería en Sistemas con interés en diseño UX y desarrollo de software.",
     career: "Ingeniería en Sistemas",
     semester: "6°",
+    profilePicture: ""
   });
 
   const [draft, setDraft] = useState<ProfileData>(profile);
 
-  // Cargar perfil guardado localmente o de la API (idéntico al archivo anterior)
   useEffect(() => {
     const cargarUsuario = () => {
       try {
-        const storedUser = localStorage.getItem("usuario") || localStorage.getItem("user");
+        const storedUser = localStorage.getItem("user");
         if (storedUser) {
           const u = JSON.parse(storedUser);
           const datos = {
             id: u.id || "",
-            name: u.name || u.nombre || u.fullName || "Ana García Pérez",
-            email: u.email || u.correo || "ana.garcia@universidad.edu",
+            name: u.name || u.nombre || u.fullName || "Estudiante",
+            email: u.email || u.correo || "",
             role: "Estudiante",
             university: u.university || u.escuela || "Universidad Nacional Autónoma",
             phone: u.phone || u.telefono || "+52 55 1234 5678",
             bio: u.bio || "Estudiante de Ingeniería en Sistemas con interés en diseño UX y desarrollo de software.",
             career: u.career || u.carrera || "Ingeniería en Sistemas",
             semester: u.semester || u.semestre || "6°",
+            profilePicture: u.profilePicture || ""
           };
           setProfile(datos);
           setDraft(datos);
@@ -124,36 +127,100 @@ export const EstudiantePerfil: React.FC = () => {
     fetchMetricas();
   }, []);
 
+  // 🟢 Limpieza del object URL de previsualización al desmontar o reemplazar
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  // 🟢 CAMBIADO: ya no sube nada al servidor. Solo guarda el archivo
+  // seleccionado y genera una previsualización local (URL.createObjectURL).
+  // La subida real ocurre en handleGuardarCambios().
+  const handleSeleccionarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setErrorSubida(null);
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+
+    if (e.target) e.target.value = '';
+  };
+
+  // 🟢 NUEVO: sube la foto pendiente al servidor (se llama desde Guardar cambios)
+  const subirFotoPendiente = async (): Promise<string | null> => {
+    if (!selectedFile) return null;
+
+    const formData = new FormData();
+    formData.append('profileImage', selectedFile);
+
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_BASE_URL}/usuarios/perfil/foto`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: formData
+    });
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.message || 'No se pudo actualizar la foto de perfil.');
+    }
+
+    const data = await res.json();
+    return data.usuario.profilePicture as string;
+  };
+
   const setField = (k: keyof ProfileData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setDraft(d => ({ ...d, [k]: e.target.value }));
   };
 
-  // Guardar cambios (idéntico al archivo anterior -- sigue persistiendo solo
-  // en localStorage, porque todavía no existe un PUT /api/usuarios/:id real;
-  // eso sería otra HU aparte)
-  const handleGuardarCambios = () => {
+  // 🟢 CAMBIADO: ahora es async. Si hay una foto pendiente, primero la sube;
+  // solo si eso tiene éxito continúa guardando el resto del perfil.
+  const handleGuardarCambios = async () => {
     setSaving(true);
+    setErrorSubida(null);
+
     try {
-      const storedUser = localStorage.getItem("usuario") || localStorage.getItem("user");
+      let profilePictureFinal = draft.profilePicture;
+
+      if (selectedFile) {
+        profilePictureFinal = (await subirFotoPendiente()) || profilePictureFinal;
+      }
+
+      const draftFinal = { ...draft, profilePicture: profilePictureFinal };
+
+      const storedUser = localStorage.getItem("user");
       const currentObj = storedUser ? JSON.parse(storedUser) : {};
-      const updatedObj = { ...currentObj, ...draft };
-
-      localStorage.setItem("usuario", JSON.stringify(updatedObj));
+      const updatedObj = { ...currentObj, ...draftFinal };
       localStorage.setItem("user", JSON.stringify(updatedObj));
-    } catch (e) {
-      console.error(e);
-    }
 
-    setTimeout(() => {
-      setProfile(draft);
+      setProfile(draftFinal);
+      setDraft(draftFinal);
       setIsEditing(false);
+
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      setSelectedFile(null);
+    } catch (err: any) {
+      console.error('Error al guardar cambios:', err);
+      setErrorSubida(err.message || 'No se pudo actualizar la foto de perfil.');
+    } finally {
       setSaving(false);
-    }, 300);
+    }
   };
 
   const handleCancelar = () => {
     setDraft(profile);
     setIsEditing(false);
+    setErrorSubida(null);
+
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl(null);
+    setSelectedFile(null);
   };
 
   const campos: { label: string; key: keyof ProfileData; icon: React.ReactNode }[] = [
@@ -165,8 +232,20 @@ export const EstudiantePerfil: React.FC = () => {
     { label: "Semestre", key: "semester", icon: <CalendarDays size={14} /> },
   ];
 
+  // 🟢 NUEVO: qué imagen mostrar en el avatar (previsualización local > la guardada)
+  const avatarSrc = previewUrl || (profile.profilePicture ? `${SERVER_URL}/uploads/${profile.profilePicture}` : null);
+
   return (
     <div className="p-6 flex flex-col gap-5 max-w-3xl">
+      <input type="file" ref={fileInputRef} onChange={handleSeleccionarFoto} accept="image/*" className="hidden" />
+
+      {/* Alerta visual elegante en caso de error */}
+      {errorSubida && (
+        <div className="bg-red-50 border border-red-200 text-red-600 text-xs p-3 rounded-xl font-medium flex items-center gap-2">
+          <AlertCircle size={16} /> {errorSubida}
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Perfil</h1>
@@ -177,7 +256,7 @@ export const EstudiantePerfil: React.FC = () => {
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition cursor-pointer"
           >
             <Edit2 size={15} /> Editar
           </button>
@@ -186,7 +265,8 @@ export const EstudiantePerfil: React.FC = () => {
             <button
               type="button"
               onClick={handleCancelar}
-              className="px-3.5 py-2 bg-secondary text-secondary-foreground border border-border rounded-lg text-sm font-medium hover:bg-muted transition"
+              disabled={saving}
+              className="px-3.5 py-2 bg-secondary text-secondary-foreground border border-border rounded-lg text-sm font-medium hover:bg-muted transition cursor-pointer disabled:opacity-50"
             >
               Cancelar
             </button>
@@ -194,7 +274,7 @@ export const EstudiantePerfil: React.FC = () => {
               type="button"
               onClick={handleGuardarCambios}
               disabled={saving}
-              className="px-3.5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50"
+              className="px-3.5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition disabled:opacity-50 cursor-pointer"
             >
               {saving ? "Guardando..." : "Guardar cambios"}
             </button>
@@ -202,18 +282,52 @@ export const EstudiantePerfil: React.FC = () => {
         )}
       </div>
 
-      {/* Avatar */}
+      {/* Avatar con soporte de imagen real, previsualización local o iniciales */}
       <div className="bg-card rounded-xl border border-border p-6 flex items-center gap-5">
-        <div className="w-20 h-20 rounded-full bg-primary/10 text-primary text-2xl font-bold flex items-center justify-center shrink-0">
-          {initials(profile.name)}
+        <div className="relative group shrink-0">
+          {avatarSrc ? (
+            <img
+              src={avatarSrc}
+              alt="Avatar"
+              className="w-20 h-20 rounded-full object-cover border-2 border-border shadow-xs"
+            />
+          ) : (
+            <div className="w-20 h-20 rounded-full bg-primary/10 text-primary text-2xl font-bold flex items-center justify-center">
+              {initials(profile.name)}
+            </div>
+          )}
+
+          {/* 🟢 CAMBIADO: el botón de la cámara solo aparece en modo edición */}
+          {isEditing && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="absolute bottom-0 right-0 p-1.5 bg-black text-white rounded-full shadow hover:bg-gray-800 transition cursor-pointer"
+              title="Cambiar foto de perfil"
+            >
+              <Upload size={12} />
+            </button>
+          )}
         </div>
+
         <div>
           <h2 className="text-xl font-bold text-foreground">{profile.name}</h2>
           <p className="text-sm text-muted-foreground">{profile.role} · {profile.university}</p>
+
+          {/* 🟢 CAMBIADO: el enlace de texto también solo aparece editando */}
           {isEditing && (
-            <button type="button" className="mt-2 text-xs text-primary hover:underline flex items-center gap-1">
-              <Upload size={12} /> Cambiar foto
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="mt-2 text-xs text-primary hover:underline flex items-center gap-1 cursor-pointer"
+            >
+              <Upload size={12} /> {selectedFile ? 'Cambiar foto seleccionada' : 'Cambiar foto de perfil'}
             </button>
+          )}
+          {isEditing && selectedFile && (
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Se guardará al hacer clic en "Guardar cambios".
+            </p>
           )}
         </div>
       </div>

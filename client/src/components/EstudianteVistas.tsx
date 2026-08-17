@@ -1,33 +1,54 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Search, Plus, Edit2, Clock, CheckCircle2, AlertCircle, 
-  Eye, CheckSquare, ArrowLeft, Send, Link as LinkIcon, FileText, Paperclip, Folder, Circle, Package, Upload, Trash2
+  Eye, CheckSquare, ArrowLeft, Send, Link as LinkIcon, FileText, Paperclip, Folder, Circle, Package, Upload, Trash2, X
 } from 'lucide-react';
 
-import { API_BASE_URL, SERVER_URL } from '../config/apis';
+import { API_BASE_URL, SERVER_URL } from '../config/api';
 
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;
-
 
 type EstadoActividad = 'PENDING' | 'IN_PROCESS' | 'IN_REVIEW' | 'DONE';
 type PrioridadActividad = 'HIGH' | 'MED' | 'LOW';
 
 const ESTADO_BADGES: Record<string, { label: string; cls: string }> = {
-  PENDING: { label: 'Pendiente', cls: 'bg-gray-100/80 text-gray-600 font-bold' },
-  IN_PROCESS: { label: 'En Proceso', cls: 'bg-blue-100/80 text-blue-700 font-bold' },
-  IN_REVIEW: { label: 'En Revisión', cls: 'bg-amber-100/80 text-amber-700 font-bold' },
-  DONE: { label: 'Completado', cls: 'bg-emerald-100/80 text-emerald-700 font-bold' },
-  Pendiente: { label: 'Pendiente', cls: 'bg-gray-100/80 text-gray-600 font-bold' },
-  'En Proceso': { label: 'En Proceso', cls: 'bg-blue-100/80 text-blue-700 font-bold' },
-  'En Revisión': { label: 'En Revisión', cls: 'bg-amber-100/80 text-amber-700 font-bold' },
-  Completado: { label: 'Completado', cls: 'bg-emerald-100/80 text-emerald-700 font-bold' },
+  PENDING: { label: 'Pendiente', cls: 'bg-gray-50 text-gray-600 font-medium' },
+  IN_PROCESS: { label: 'En proceso', cls: 'bg-blue-50 text-blue-600 font-medium' },
+  IN_REVIEW: { label: 'En revisión', cls: 'bg-amber-50 text-amber-600 font-medium' },
+  DONE: { label: 'Completado', cls: 'bg-green-50 text-green-600 font-medium' },
+  Pendiente: { label: 'Pendiente', cls: 'bg-gray-50 text-gray-600 font-medium' },
+  'En Proceso': { label: 'En proceso', cls: 'bg-blue-50 text-blue-600 font-medium' },
+  'En Revisión': { label: 'En revisión', cls: 'bg-amber-50 text-amber-600 font-medium' },
+  Completado: { label: 'Completado', cls: 'bg-green-50 text-green-600 font-medium' },
 };
 
+function PriorityBadge({ priority }: { priority?: PrioridadActividad | string }) {
+  const pStr = String(priority || '').toUpperCase();
+  let label = 'Alta';
+  let cls = 'bg-rose-50 text-rose-600';
+
+  if (pStr === 'MED' || pStr === 'MEDIA' || pStr === 'Media') {
+    label = 'Media';
+    cls = 'bg-amber-50 text-amber-600';
+  } else if (pStr === 'LOW' || pStr === 'BAJA' || pStr === 'Baja') {
+    label = 'Baja';
+    cls = 'bg-emerald-50 text-emerald-600';
+  }
+
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
 function mapStatusToPrisma(s: string): EstadoActividad {
-  if (s === 'En Proceso' || s === 'IN_PROCESS') return 'IN_PROCESS';
-  if (s === 'En Revisión' || s === 'IN_REVIEW') return 'IN_REVIEW';
-  if (s === 'Completado' || s === 'DONE') return 'DONE';
+  const lower = String(s || '').toLowerCase();
+  if (lower.includes('proceso') || lower === 'in_process') return 'IN_PROCESS';
+  if (lower.includes('revisión') || lower.includes('revision') || lower === 'in_review') return 'IN_REVIEW';
+  if (lower.includes('completado') || lower.includes('completada') || lower === 'done') return 'DONE';
   return 'PENDING';
 }
 
@@ -39,7 +60,11 @@ function formatearFecha(f?: string) {
 
 function formatearFechaInput(f?: string) {
   if (!f) return '';
-  return new Date(f).toISOString().split('T')[0];
+  const d = new Date(f);
+  const anio = d.getFullYear();
+  const mes = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
 }
 
 interface Miembro {
@@ -58,6 +83,7 @@ interface Actividad {
   name: string;
   description: string | null;
   deadline: string;
+  createdAt?: string;
   status: string;
   priority?: PrioridadActividad;
   projectId?: string | null;
@@ -95,7 +121,20 @@ function abrirEvidenciaUrl(url: string) {
   }
 }
 
+function getUserNameFromStorage() {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (!userStr) return 'Estudiante';
+    const user = JSON.parse(userStr);
+    return user.name || 'Estudiante';
+  } catch {
+    return 'Estudiante';
+  }
+}
+
 export const ActividadesPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+
   const [actividades, setActividades] = useState<Actividad[]>([]);
   const [usuariosDisponibles, setUsuariosDisponibles] = useState<Miembro[]>([]);
   const [proyectosDisponibles, setProyectosDisponibles] = useState<ProyectoSimple[]>([]);
@@ -107,6 +146,7 @@ export const ActividadesPage: React.FC = () => {
   const [vistaDetalle, setVistaDetalle] = useState<Actividad | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState<Actividad | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
 
   const [formDraft, setFormDraft] = useState({
     nombre: '',
@@ -139,7 +179,12 @@ export const ActividadesPage: React.FC = () => {
   };
 
   const currentUserId = getUserIdFromToken();
+  const nombreEstudiante = getUserNameFromStorage();
 
+  // ✅ FIX: ahora esta función siempre re-sincroniza actividadSeleccionada
+  // y vistaDetalle con los datos frescos del backend, buscando por id.
+  // Antes solo asignaba un valor cuando actividadSeleccionada era null,
+  // por eso los cambios de prioridad/estado no se reflejaban tras editar.
   const fetchActividades = async () => {
     setLoading(true);
     try {
@@ -149,7 +194,18 @@ export const ActividadesPage: React.FC = () => {
         const data = await res.json();
         const lista: Actividad[] = data.actividades || [];
         setActividades(lista);
-        if (lista.length > 0 && !actividadSeleccionada) setActividadSeleccionada(lista[0]);
+
+        // Re-sincroniza la actividad seleccionada (panel "Detalle rápido")
+        setActividadSeleccionada(prev => {
+          if (!prev) return lista[0] ?? null;
+          return lista.find(a => a.id === prev.id) ?? lista[0] ?? null;
+        });
+
+        // Re-sincroniza la actividad en vista de detalle completo, si está abierta
+        setVistaDetalle(prev => {
+          if (!prev) return prev;
+          return lista.find(a => a.id === prev.id) ?? prev;
+        });
       }
     } catch (err) {
       console.error('Error al cargar actividades:', err);
@@ -162,18 +218,12 @@ export const ActividadesPage: React.FC = () => {
     try {
       const token = localStorage.getItem('token');
       const [resU, resP] = await Promise.all([
-      fetch(API_USUARIOS_URL, { headers: { Authorization: `Bearer ${token}` } }),
-      fetch(`${API_BASE_URL}/actividades/proyectos`, { headers: { Authorization: `Bearer ${token}` } })
+        fetch(API_USUARIOS_URL, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${API_BASE_URL}/actividades/proyectos`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
-      if (resU.ok) {
-        const dataU = await resU.json();
-        setUsuariosDisponibles(dataU.usuarios || []);
-      }
-      if (resP.ok) {
-        const dataP = await resP.json();
-        setProyectosDisponibles(dataP.proyectos || []);
-      }
+      if (resU.ok) setUsuariosDisponibles((await resU.json()).usuarios || []);
+      if (resP.ok) setProyectosDisponibles((await resP.json()).proyectos || []);
     } catch (err) {
       console.error('Error al cargar usuarios o proyectos:', err);
     }
@@ -183,6 +233,19 @@ export const ActividadesPage: React.FC = () => {
     fetchActividades();
     fetchUsuariosYProyectos();
   }, []);
+
+  useEffect(() => {
+    const idDesdeUrl = searchParams.get('id');
+    if (idDesdeUrl && actividades.length > 0) {
+      const encontrada = actividades.find(a => a.id === idDesdeUrl);
+      if (encontrada) {
+        setVistaDetalle(encontrada);
+        setActividadSeleccionada(encontrada);
+      }
+    }
+  }, [searchParams, actividades]);
+
+  const projectIdDesdeUrl = searchParams.get('projectId');
 
   const fetchEvidenciasDeActividad = async (actividadId: string) => {
     try {
@@ -203,17 +266,12 @@ export const ActividadesPage: React.FC = () => {
   useEffect(() => {
     if (vistaDetalle) {
       const token = localStorage.getItem('token');
-
-      fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/comentarios`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/comentarios`, { headers: { Authorization: `Bearer ${token}` } })
         .then(res => res.json())
         .then(data => setComentarios(data.comentarios || []))
         .catch(err => console.error('Error comentarios:', err));
 
-      fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/evaluacion`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/evaluacion`, { headers: { Authorization: `Bearer ${token}` } })
         .then(res => res.json())
         .then(data => setEvaluacion(data.evaluacion || null))
         .catch(err => console.error('Error evaluación:', err));
@@ -224,6 +282,7 @@ export const ActividadesPage: React.FC = () => {
 
   const handleCrearActividad = async (e: React.FormEvent) => {
     e.preventDefault();
+    setModalError(null);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(API_ACTIVIDADES_URL, {
@@ -245,16 +304,17 @@ export const ActividadesPage: React.FC = () => {
         fetchActividades();
       } else {
         const err = await res.json();
-        alert(err.message || 'Error al crear la actividad.');
+        setModalError(err.message || 'Error al crear la actividad.');
       }
     } catch (err) {
-      console.error('Error al crear actividad:', err);
+      setModalError('Error de conexión al crear la actividad.');
     }
   };
 
   const handleEditarActividad = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editModalOpen) return;
+    setModalError(null);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_ACTIVIDADES_URL}/${editModalOpen.id}`, {
@@ -276,10 +336,10 @@ export const ActividadesPage: React.FC = () => {
         fetchActividades();
       } else {
         const err = await res.json();
-        alert(err.message || 'Error al actualizar actividad.');
+        setModalError(err.message || 'Error al actualizar actividad.');
       }
     } catch (err) {
-      console.error('Error al actualizar actividad:', err);
+      setModalError('Error de conexión al actualizar.');
     }
   };
 
@@ -310,12 +370,7 @@ export const ActividadesPage: React.FC = () => {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      if (res.ok) {
-        setComentarios(prev => prev.filter(c => c.id !== comentarioId));
-      } else {
-        alert('No se pudo eliminar el comentario.');
-      }
+      if (res.ok) setComentarios(prev => prev.filter(c => c.id !== comentarioId));
     } catch (err) {
       console.error('Error al eliminar comentario:', err);
     }
@@ -355,11 +410,8 @@ export const ActividadesPage: React.FC = () => {
         body: formData
       });
 
-      if (res.ok) {
-        await fetchEvidenciasDeActividad(vistaDetalle.id);
-      } else {
-        alert('Error al subir el archivo.');
-      }
+      if (res.ok) await fetchEvidenciasDeActividad(vistaDetalle.id);
+      else alert('Error al subir el archivo.');
     } catch (err) {
       console.error('Error al subir archivo:', err);
     } finally {
@@ -382,6 +434,7 @@ export const ActividadesPage: React.FC = () => {
   };
 
   const abrirEditar = (act: Actividad) => {
+    setModalError(null);
     setEditModalOpen(act);
     setFormDraft({
       nombre: act.name,
@@ -397,14 +450,10 @@ export const ActividadesPage: React.FC = () => {
   const renderStatusIcon = (statusStr: string) => {
     const prismaStatus = mapStatusToPrisma(statusStr);
     switch (prismaStatus) {
-      case 'PENDING':
-        return <Circle size={18} className="text-gray-300" />;
-      case 'IN_PROCESS':
-        return <AlertCircle size={18} className="text-blue-500" />;
-      case 'IN_REVIEW':
-        return <Clock size={18} className="text-amber-500" />;
-      case 'DONE':
-        return <CheckCircle2 size={18} className="text-emerald-500" />;
+      case 'PENDING': return <Circle size={18} className="text-gray-300" />;
+      case 'IN_PROCESS': return <AlertCircle size={18} className="text-blue-500" />;
+      case 'IN_REVIEW': return <Clock size={18} className="text-amber-500" />;
+      case 'DONE': return <CheckCircle2 size={18} className="text-emerald-500" />;
     }
   };
 
@@ -417,7 +466,9 @@ export const ActividadesPage: React.FC = () => {
       (filterStatus === 'DONE' && estadoPrisma === 'DONE');
     
     const coincideBusqueda = a.name.toLowerCase().includes(search.toLowerCase());
-    return coincideEstado && coincideBusqueda;
+    const coincideProyecto = !projectIdDesdeUrl || a.projectId === projectIdDesdeUrl;
+
+    return coincideEstado && coincideBusqueda && coincideProyecto;
   });
 
   const counts = {
@@ -431,59 +482,46 @@ export const ActividadesPage: React.FC = () => {
   if (vistaDetalle) {
     const badgeObj = ESTADO_BADGES[vistaDetalle.status] || ESTADO_BADGES['PENDING'];
     const nombreProyecto = proyectosDisponibles.find(p => p.id === vistaDetalle.projectId)?.name || 'ClassBoard Equipo A';
-
-    // Comentarios limpios filtrando los datos internos de evaluación JSON
     const comentariosVisibles = comentarios.filter(c => !c.content.startsWith('__EVALUACION_JSON__:'));
 
     return (
-      <div className="p-6 space-y-6 w-full font-sans antialiased text-gray-900 box-border">
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleSubirArchivoEvidencia}
-          accept=".pdf,.docx,.doc,.png,.jpg,.zip"
-          className="hidden"
-        />
+      <div className="p-4 sm:p-6 space-y-6 w-full font-sans antialiased text-gray-900 box-border">
+        <input type="file" ref={fileInputRef} onChange={handleSubirArchivoEvidencia} accept=".pdf,.docx,.doc,.png,.jpg,.zip" className="hidden" />
 
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setVistaDetalle(null)} className="p-1 text-gray-400 hover:text-gray-700 transition cursor-pointer">
+          <div className="flex items-center gap-3 min-w-0 pr-2">
+            <button onClick={() => setVistaDetalle(null)} className="p-1 text-gray-400 hover:text-gray-700 transition cursor-pointer shrink-0">
               <ArrowLeft size={20} />
             </button>
-            <div>
-              <h1 className="text-xl font-bold text-gray-900 tracking-tight">{vistaDetalle.name}</h1>
-              <p className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5">
-                <Folder size={12} className="text-blue-500" />
-                Proyecto: <strong className="text-gray-700">{nombreProyecto}</strong>
+            <div className="min-w-0">
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900 tracking-tight truncate">{vistaDetalle.name}</h1>
+              <p className="text-xs text-gray-400 font-medium flex items-center gap-1 mt-0.5 truncate">
+                <Folder size={12} className="text-blue-500 shrink-0" />
+                <span className="truncate">Proyecto: <strong className="text-gray-700">{nombreProyecto}</strong></span>
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 text-xs font-semibold">
-            <span className="text-gray-400">Estado:</span>
-            <span className={`px-3 py-1 rounded-full ${badgeObj.cls}`}>{badgeObj.label}</span>
+          <div className="flex items-center gap-2 text-xs shrink-0">
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${badgeObj.cls}`}>{badgeObj.label}</span>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
               <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Descripción</h3>
-              <p className="text-xs text-gray-600 leading-relaxed">
+              <p className="text-xs text-gray-600 leading-relaxed break-words">
                 {vistaDetalle.description || 'Analizar necesidades y comportamientos de los usuarios del sistema.'}
               </p>
 
-              <div className="grid grid-cols-3 gap-4 pt-4 border-t border-gray-50 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-gray-50 text-xs">
                 <div>
                   <p className="text-gray-400 font-medium">Responsable</p>
-                  <p className="font-bold text-gray-800 mt-0.5">
-                    {vistaDetalle.assignees?.[0]?.user?.name || 'Ana García'}
-                  </p>
+                  <p className="font-bold text-gray-800 mt-0.5 truncate">{vistaDetalle.assignees?.[0]?.user?.name || 'Ana García'}</p>
                 </div>
                 <div>
                   <p className="text-gray-400 font-medium">Prioridad</p>
-                  <p className="font-bold text-red-600 mt-0.5">
-                    {vistaDetalle.priority === 'HIGH' ? 'Alta' : vistaDetalle.priority === 'LOW' ? 'Baja' : 'Media'}
-                  </p>
+                  <div className="mt-0.5"><PriorityBadge priority={vistaDetalle.priority} /></div>
                 </div>
                 <div>
                   <p className="text-gray-400 font-medium">Fecha límite</p>
@@ -492,10 +530,8 @@ export const ActividadesPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                Comentarios ({comentariosVisibles.length})
-              </h3>
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Comentarios ({comentariosVisibles.length})</h3>
 
               <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
                 {comentariosVisibles.map((c) => (
@@ -503,30 +539,23 @@ export const ActividadesPage: React.FC = () => {
                     <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold flex items-center justify-center shrink-0 text-[10px]">
                       {c.author?.name ? c.author.name.slice(0, 2).toUpperCase() : 'AG'}
                     </div>
-                    <div className="flex-1 bg-gray-50/60 p-3 rounded-xl border border-gray-100 space-y-1">
-                      <div className="flex justify-between items-center">
-                        <span className="font-bold text-gray-800">{c.author?.name || 'Ana García'}</span>
-                        <div className="flex items-center gap-2">
+                    <div className="flex-1 bg-gray-50/60 p-3 rounded-xl border border-gray-100 space-y-1 min-w-0">
+                      <div className="flex justify-between items-center gap-2">
+                        <span className="font-bold text-gray-800 truncate">{c.author?.name || 'Ana García'}</span>
+                        <div className="flex items-center gap-2 shrink-0">
                           <span className="text-[10px] text-gray-400">{formatearFecha(c.createdAt)}</span>
                           {String(c.author?.id) === String(currentUserId) && (
-                            <button
-                              onClick={() => handleEliminarComentario(c.id)}
-                              className="text-gray-400 hover:text-red-600 transition p-0.5 cursor-pointer"
-                              title="Eliminar comentario"
-                            >
+                            <button onClick={() => handleEliminarComentario(c.id)} className="text-gray-400 hover:text-red-600 transition p-0.5 cursor-pointer">
                               <Trash2 size={12} />
                             </button>
                           )}
                         </div>
                       </div>
-                      <p className="text-gray-600 leading-normal">{c.content}</p>
+                      <p className="text-gray-600 leading-normal break-words">{c.content}</p>
                     </div>
                   </div>
                 ))}
-
-                {comentariosVisibles.length === 0 && (
-                  <p className="text-xs text-gray-400 italic py-2">No hay comentarios aún. Escribe el primero.</p>
-                )}
+                {comentariosVisibles.length === 0 && <p className="text-xs text-gray-400 italic py-2">No hay comentarios aún. Escribe el primero.</p>}
               </div>
 
               <div className="flex gap-2 pt-2">
@@ -536,12 +565,9 @@ export const ActividadesPage: React.FC = () => {
                   onChange={e => setNuevoComentario(e.target.value)}
                   placeholder="Escribe un comentario..."
                   onKeyDown={e => e.key === 'Enter' && handleEnviarComentario()}
-                  className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:bg-white"
+                  className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:bg-white min-w-0"
                 />
-                <button 
-                  onClick={handleEnviarComentario}
-                  className="p-3 bg-black text-white rounded-xl hover:bg-gray-900 transition flex items-center justify-center cursor-pointer"
-                >
+                <button onClick={handleEnviarComentario} className="p-3 bg-black text-white rounded-xl hover:bg-gray-900 transition flex items-center justify-center cursor-pointer shrink-0">
                   <Send size={14} />
                 </button>
               </div>
@@ -549,41 +575,24 @@ export const ActividadesPage: React.FC = () => {
           </div>
 
           <div className="space-y-6">
-            <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
-                Evidencias ({evidencias.length})
-              </h3>
+            <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Evidencias ({evidencias.length})</h3>
 
               <div className="space-y-2">
                 {evidencias.map((e) => (
-                  <div
-                    key={e.id}
-                    className="flex items-center justify-between p-2.5 bg-gray-50/80 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700"
-                  >
-                    <div className="flex items-center gap-2 truncate pr-2">
+                  <div key={e.id} className="flex items-center justify-between p-2.5 bg-gray-50/80 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700 gap-2">
+                    <div className="flex items-center gap-2 truncate min-w-0 flex-1">
                       <FileText size={14} className="text-gray-500 shrink-0" />
-                      <button
-                        type="button"
-                        onClick={() => abrirEvidenciaUrl(e.url)}
-                        className="truncate font-bold text-gray-800 hover:underline text-left cursor-pointer"
-                        title={e.url}
-                      >
+                      <button type="button" onClick={() => abrirEvidenciaUrl(e.url)} className="truncate font-bold text-gray-800 hover:underline text-left cursor-pointer">
                         {e.url}
                       </button>
                     </div>
-                    <button
-                      onClick={() => handleEliminarEvidencia(e.id)}
-                      className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0"
-                      title="Eliminar evidencia"
-                    >
+                    <button onClick={() => handleEliminarEvidencia(e.id)} className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0">
                       <Trash2 size={13} />
                     </button>
                   </div>
                 ))}
-
-                {evidencias.length === 0 && (
-                  <p className="text-xs text-gray-400 italic py-1">Sin evidencias registradas.</p>
-                )}
+                {evidencias.length === 0 && <p className="text-xs text-gray-400 italic py-1">Sin evidencias registradas.</p>}
               </div>
 
               {mostrandoInputEvidencia ? (
@@ -594,36 +603,25 @@ export const ActividadesPage: React.FC = () => {
                       value={nuevaEvidenciaUrl}
                       onChange={e => setNuevaEvidenciaUrl(e.target.value)}
                       placeholder="Pega un enlace (https://...)"
-                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none"
+                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none min-w-0"
                     />
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-[11px] font-bold text-gray-700 flex items-center gap-1 cursor-pointer shrink-0"
-                      title="Subir archivo (PDF/DOCX/etc.)"
                     >
                       <Upload size={13} /> Archivo
                     </button>
                   </div>
                   <div className="flex justify-end gap-2">
-                    <button 
-                      onClick={() => setMostrandoInputEvidencia(false)}
-                      className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
-                    <button 
-                      onClick={handleSubirEvidenciaLink}
-                      className="px-3 py-1 text-[11px] font-bold text-white bg-black rounded-lg cursor-pointer"
-                    >
-                      Guardar enlace
-                    </button>
+                    <button onClick={() => setMostrandoInputEvidencia(false)} className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer">Cancelar</button>
+                    <button onClick={handleSubirEvidenciaLink} className="px-3 py-1 text-[11px] font-bold text-white bg-black rounded-lg cursor-pointer">Guardar enlace</button>
                   </div>
                 </div>
               ) : (
                 <button 
                   onClick={() => setMostrandoInputEvidencia(true)}
-                  className="w-full py-2 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full py-2.5 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Paperclip size={13} /> Subir evidencia
                 </button>
@@ -636,7 +634,6 @@ export const ActividadesPage: React.FC = () => {
                   <h3 className="text-xs font-bold text-blue-900 uppercase tracking-wider">Evaluación</h3>
                   <span className="text-blue-700 font-extrabold text-sm">{evaluacion.score} / 10</span>
                 </div>
-
                 <div className="space-y-1.5 pt-2 border-t border-blue-100">
                   {evaluacion.criteria?.map((crit) => (
                     <div key={crit.id} className="flex justify-between text-gray-600">
@@ -645,18 +642,8 @@ export const ActividadesPage: React.FC = () => {
                     </div>
                   ))}
                 </div>
-
-                {evaluacion.comentario && (
-                  <p className="text-gray-600 pt-2 border-t border-blue-100 leading-relaxed">
-                    {evaluacion.comentario}
-                  </p>
-                )}
-
-                {evaluacion.evaluator?.name && (
-                  <p className="text-[10px] text-gray-400 pt-1">
-                    Evaluado por {evaluacion.evaluator.name}
-                  </p>
-                )}
+                {evaluacion.comentario && <p className="text-gray-600 pt-2 border-t border-blue-100 leading-relaxed">{evaluacion.comentario}</p>}
+                {evaluacion.evaluator?.name && <p className="text-[10px] text-gray-400 pt-1">Evaluado por {evaluacion.evaluator.name}</p>}
               </div>
             )}
 
@@ -682,14 +669,15 @@ export const ActividadesPage: React.FC = () => {
   }
 
   return (
-    <div className="p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border">
+    <div className="p-4 sm:p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border relative">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Actividades</h1>
-          <p className="text-xs text-gray-400 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight truncate">Actividades</h1>
+          <p className="text-xs text-gray-400 font-medium mt-0.5 truncate">Proyecto: ClassBoard Equipo A</p>
         </div>
         <button 
           onClick={() => {
+            setModalError(null);
             setFormDraft({
               nombre: '',
               descripcion: '',
@@ -701,66 +689,52 @@ export const ActividadesPage: React.FC = () => {
             });
             setCreateModalOpen(true);
           }}
-          className="px-4 py-2 bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-gray-900 transition cursor-pointer"
+          className="w-full sm:w-auto px-4 py-2.5 bg-black text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm hover:bg-gray-900 transition cursor-pointer shrink-0"
         >
           <Plus size={15} /> Agregar actividad
         </button>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-            <CheckSquare size={18} />
-          </div>
-          <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.total}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Total</p>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0"><CheckSquare size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.total}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">Total</p>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center shrink-0">
-            <Clock size={18} />
-          </div>
-          <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.pendientes}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Pendientes</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gray-50 text-gray-400 flex items-center justify-center shrink-0"><Clock size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.pendientes}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">Pendientes</p>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <AlertCircle size={18} />
-          </div>
-          <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.enProceso}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">En Proceso</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0"><AlertCircle size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.enProceso}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">En proceso</p>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <Eye size={18} />
-          </div>
-          <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.enRevision}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">En Revisión</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0"><Eye size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.enRevision}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">En revisión</p>
           </div>
         </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50">
-          <div className="w-9 h-9 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
-            <CheckCircle2 size={18} />
-          </div>
-          <div>
-            <p className="text-lg font-black text-gray-900 leading-none">{counts.completadas}</p>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Completadas</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs min-w-0 col-span-2 sm:col-span-1">
+          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-green-50 text-green-600 flex items-center justify-center shrink-0"><CheckCircle2 size={18} /></div>
+          <div className="min-w-0 flex-1">
+            <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{counts.completadas}</p>
+            <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">Completadas</p>
           </div>
         </div>
       </div>
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-        <div className="relative flex-1 max-w-xs">
+        <div className="relative flex-1 w-full sm:max-w-xs">
           <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
           <input 
             value={search} 
@@ -769,7 +743,7 @@ export const ActividadesPage: React.FC = () => {
             className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200/80 rounded-xl text-xs font-medium focus:outline-none focus:border-gray-300 transition" 
           />
         </div>
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
           {[
             { key: 'Todos', label: 'Todos' },
             { key: 'PENDING', label: 'Pendiente' },
@@ -780,7 +754,7 @@ export const ActividadesPage: React.FC = () => {
             <button 
               key={f.key} 
               onClick={() => setFilterStatus(f.key)} 
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer shrink-0 ${
                 filterStatus === f.key ? 'bg-black text-white' : 'bg-white border border-gray-200/80 text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -865,9 +839,7 @@ export const ActividadesPage: React.FC = () => {
             <div className="space-y-2 border-t border-gray-50 pt-3">
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Prioridad</span>
-                <span className="text-[11px] font-extrabold text-red-600">
-                  {actividadSeleccionada.priority === 'HIGH' ? 'Alta' : 'Media'}
-                </span>
+                <PriorityBadge priority={actividadSeleccionada.priority} />
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Fecha límite</span>
@@ -896,24 +868,6 @@ export const ActividadesPage: React.FC = () => {
                 ))}
               </div>
             </div>
-
-            <div className="border-t border-gray-50 pt-3 space-y-2 text-xs">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Próximas entregas</p>
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-gray-600 text-[11px]">
-                  <span>Investigar usuarios</span>
-                  <span className="font-bold text-gray-800">23/05/2025</span>
-                </div>
-                <div className="flex justify-between text-gray-600 text-[11px]">
-                  <span>Definir alcance</span>
-                  <span className="font-bold text-gray-800">25/05/2025</span>
-                </div>
-                <div className="flex justify-between text-gray-600 text-[11px]">
-                  <span>Diseño de interfaz</span>
-                  <span className="font-bold text-gray-800">27/05/2025</span>
-                </div>
-              </div>
-            </div>
           </div>
         )}
       </div>
@@ -923,6 +877,11 @@ export const ActividadesPage: React.FC = () => {
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4 relative">
             <h3 className="text-sm font-bold text-gray-900 uppercase">Crear actividad</h3>
             <p className="text-xs text-gray-400">Completa los datos para la nueva actividad.</p>
+            {modalError && (
+              <p className="text-xs text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                {modalError}
+              </p>
+            )}
 
             <form onSubmit={handleCrearActividad} className="space-y-4 text-xs">
               <div>
@@ -968,7 +927,7 @@ export const ActividadesPage: React.FC = () => {
                   <select 
                     value={formDraft.estado}
                     onChange={e => setFormDraft({ ...formDraft, estado: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
+                    className="w-full p-2.5 bg-white border border-gray-300 rounded-xl focus:outline-none focus:border-black font-semibold text-gray-900 cursor-pointer"
                   >
                     <option value="PENDING">Pendiente</option>
                     <option value="IN_PROCESS">En Proceso</option>
@@ -1052,6 +1011,11 @@ export const ActividadesPage: React.FC = () => {
           <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4 relative">
             <h3 className="text-sm font-bold text-gray-900 uppercase">Editar Actividad</h3>
             <p className="text-xs text-gray-400">Modifica los datos de la actividad seleccionada.</p>
+            {modalError && (
+              <p className="text-xs text-red-600 font-semibold bg-red-50 border border-red-100 rounded-xl px-3 py-2">
+                {modalError}
+              </p>
+            )}
 
             <form onSubmit={handleEditarActividad} className="space-y-4 text-xs">
               <div>
@@ -1096,7 +1060,7 @@ export const ActividadesPage: React.FC = () => {
                   <select 
                     value={formDraft.estado}
                     onChange={e => setFormDraft({ ...formDraft, estado: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
+                    className="w-full p-2.5 bg-white border border-gray-300 rounded-xl focus:outline-none focus:border-black font-semibold text-gray-900 cursor-pointer"
                   >
                     <option value="PENDING">Pendiente</option>
                     <option value="IN_PROCESS">En Proceso</option>
@@ -1177,496 +1141,4 @@ export const ActividadesPage: React.FC = () => {
   );
 };
 
-type EstadoEntrega = "Pendiente" | "En Revisión" | "Aprobado" | "Completada";
-
-export type Entrega = {
-  id: string;
-  title: string;
-  description: string;
-  dueDate: string;
-  format: string;
-  status: EstadoEntrega;
-  evidence: { id: string; url: string; isLink?: boolean }[];
-};
-
-function StatCardEntrega({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
-  return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-3.5 shadow-sm shadow-gray-100/50 box-border">
-      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-lg font-black text-gray-900 leading-none">{value}</p>
-        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">{label}</p>
-      </div>
-    </div>
-  );
-}
-
-export const EntregasPage: React.FC = () => {
-  const [entregas, setEntregas] = useState<Entrega[]>([]);
-  const [selectedEntrega, setSelectedEntrega] = useState<Entrega | null>(null);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState("Todos");
-  const [loading, setLoading] = useState(true);
-
-  const [modalOpen, setModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<"file" | "link">("file");
-  const [linkInput, setLinkInput] = useState("");
-  const [entregaTargetId, setEntregaTargetId] = useState<string | null>(null);
-  const [subiendo, setSubiendo] = useState(false);
-
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-
-  const fetchEntregasReal = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(API_ACTIVIDADES_URL, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const listaRaw = data.actividades || data || [];
-
-        const listaMapeada: Entrega[] = listaRaw.map((a: any) => {
-          let st: EstadoEntrega = "Pendiente";
-          if (a.status === "IN_REVIEW" || a.status === "En Revisión") st = "En Revisión";
-          if (a.status === "APPROVED" || a.status === "Aprobado") st = "Aprobado";
-          if (a.status === "DONE" || a.status === "Completado" || a.status === "Completada") st = "Completada";
-
-          const listaEvidencias = a.evidencias || a.evidence || [];
-          const evidenciasLimpias = listaEvidencias
-            .filter((e: any) => e && (e.url || e.contenido) && !String(e.url || e.contenido).includes('undefined'))
-            .map((e: any) => {
-              const urlVal = String(e.url || e.contenido);
-              return {
-                id: String(e.id || Date.now()),
-                url: urlVal,
-                isLink: urlVal.startsWith("http://") || urlVal.startsWith("https://")
-              };
-            });
-
-          return {
-            id: String(a.id),
-            title: a.name || a.title || "Entrega de proyecto",
-            description: a.description || "Sub reporte de hallazgos y evidencias correspondientes.",
-            dueDate: a.deadline ? new Date(a.deadline).toLocaleDateString("es-MX") : "23/05/2026",
-            format: "PDF / DOCX / LINK",
-            status: st,
-            evidence: evidenciasLimpias
-          };
-        });
-
-        setEntregas(listaMapeada);
-
-        if (listaMapeada.length > 0) {
-          setSelectedEntrega(prev => {
-            if (!prev) return listaMapeada[0];
-            const actualizada = listaMapeada.find(item => item.id === prev.id);
-            return actualizada || listaMapeada[0];
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Error al obtener entregas desde la API:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchEntregasReal();
-  }, []);
-
-  const abrirModalSubida = (entregaId: string) => {
-    setEntregaTargetId(entregaId);
-    setLinkInput("");
-    setActiveTab("file");
-    setModalOpen(true);
-  };
-
-  const handleGuardarLink = async () => {
-    if (!linkInput.trim() || !entregaTargetId) return;
-
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_ACTIVIDADES_URL}/${entregaTargetId}/evidencias`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ url: linkInput.trim() })
-      });
-
-      if (res.ok) {
-        await fetchEntregasReal();
-      } else {
-        alert("Error al guardar el enlace.");
-      }
-    } catch (err) {
-      console.error("Error al guardar link:", err);
-    } finally {
-      setModalOpen(false);
-    }
-  };
-
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !entregaTargetId) return;
-
-    setSubiendo(true);
-    try {
-      const token = localStorage.getItem("token");
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch(`${API_ACTIVIDADES_URL}/${entregaTargetId}/evidencias/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
-      });
-
-      if (res.ok) {
-        await fetchEntregasReal();
-      } else {
-        const err = await res.json().catch(() => ({}));
-        alert(err.message || "Error al subir el archivo.");
-      }
-    } catch (err) {
-      console.error("Error al subir archivo:", err);
-    } finally {
-      setSubiendo(false);
-      if (e.target) e.target.value = '';
-      setModalOpen(false);
-    }
-  };
-
-  const handleEliminarEvidencia = async (evidenciaId: string) => {
-    if (!confirm("¿Deseas eliminar esta evidencia?")) return;
-
-    try {
-      const token = localStorage.getItem("token");
-      const res = await fetch(`${API_ACTIVIDADES_URL}/evidencias/${evidenciaId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      if (res.ok) {
-        await fetchEntregasReal();
-      }
-    } catch (err) {
-      console.error("Error al eliminar evidencia:", err);
-    }
-  };
-
-  const entregasFiltradas = entregas.filter(e => {
-    const coincideEstado = filterStatus === "Todos" || e.status === filterStatus;
-    const coincideBusqueda = e.title.toLowerCase().includes(search.toLowerCase());
-    return coincideEstado && coincideBusqueda;
-  });
-
-  const getBadgeStyle = (status: EstadoEntrega) => {
-    switch (status) {
-      case "Pendiente": return "bg-gray-100/80 text-gray-600 font-bold";
-      case "En Revisión": return "bg-amber-100/80 text-amber-700 font-bold";
-      case "Aprobado": return "bg-emerald-100/80 text-emerald-700 font-bold";
-      case "Completada": return "bg-green-100/80 text-green-700 font-bold";
-    }
-  };
-
-  const counts = {
-    total: entregas.length,
-    pendientes: entregas.filter(e => e.status === "Pendiente").length,
-    enRevision: entregas.filter(e => e.status === "En Revisión").length,
-    aprobados: entregas.filter(e => e.status === "Aprobado").length,
-    completadas: entregas.filter(e => e.status === "Completada").length,
-  };
-
-  return (
-    <div className="p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border">
-      
-      <input 
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        accept=".pdf,.docx,.doc,.png,.jpg,.zip"
-        className="hidden"
-      />
-
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Entregas</h1>
-        <p className="text-xs text-gray-400 font-medium mt-0.5">Proyecto: ClassBoard Equipo A</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 w-full">
-        <StatCardEntrega label="Total" value={counts.total} color="bg-indigo-50 text-indigo-600" icon={<Package size={18} />} />
-        <StatCardEntrega label="Pendientes" value={counts.pendientes} color="bg-gray-50 text-gray-400" icon={<Clock size={18} />} />
-        <StatCardEntrega label="En Revisión" value={counts.enRevision} color="bg-amber-50 text-amber-600" icon={<Eye size={18} />} />
-        <StatCardEntrega label="Aprobados" value={counts.aprobados} color="bg-emerald-50 text-emerald-600" icon={<CheckCircle2 size={18} />} />
-        <StatCardEntrega label="Completadas" value={counts.completadas} color="bg-green-50 text-green-600" icon={<CheckCircle2 size={18} />} />
-      </div>
-
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input 
-            value={search} 
-            onChange={e => setSearch(e.target.value)} 
-            placeholder="Buscar entrega..." 
-            className="w-full pl-9 pr-3 py-1.5 bg-white border border-gray-200/80 rounded-xl text-xs font-medium focus:outline-none focus:border-gray-300 transition" 
-          />
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {['Todos', 'Pendiente', 'En Revisión', 'Aprobado', 'Completada'].map(s => (
-            <button 
-              key={s} 
-              onClick={() => setFilterStatus(s)} 
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-                filterStatus === s 
-                  ? 'bg-black text-white' 
-                  : 'bg-white border border-gray-200/80 text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              {s}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-col lg:flex-row gap-5 items-start w-full">
-        
-        <div className="flex-1 w-full space-y-3">
-          {loading ? (
-            <div className="p-8 text-center text-xs text-gray-400 bg-white rounded-2xl border border-gray-100">
-              Cargando entregas...
-            </div>
-          ) : entregasFiltradas.length > 0 ? (
-            entregasFiltradas.map((e) => {
-              const isSelected = selectedEntrega?.id === e.id;
-
-              return (
-                <div 
-                  key={e.id} 
-                  onClick={() => setSelectedEntrega(e)}
-                  className={`bg-white p-4 rounded-2xl border transition cursor-pointer shadow-sm flex items-center justify-between gap-4 ${
-                    isSelected ? 'border-gray-300 ring-1 ring-gray-200' : 'border-gray-100 hover:border-gray-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-3.5 min-w-0 flex-1">
-                    <div className="shrink-0 text-slate-800">
-                      <FileText size={20} />
-                    </div>
-                    <div className="min-w-0">
-                      <h4 className="font-bold text-gray-900 text-xs truncate">{e.title}</h4>
-                      <p className="text-[11px] text-gray-400 font-medium mt-0.5">{e.description}</p>
-                      <p className="text-[10px] text-gray-400 font-semibold mt-1">
-                        Fecha límite: {e.dueDate} &nbsp;·&nbsp; Formato: {e.format}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase ${getBadgeStyle(e.status)}`}>
-                      {e.status}
-                    </span>
-                    <button 
-                      onClick={(ev) => {
-                        ev.stopPropagation();
-                        abrirModalSubida(e.id);
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-xs font-bold transition cursor-pointer"
-                    >
-                      <Upload size={12} /> Subir
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="p-8 text-center text-xs text-gray-400 bg-white rounded-2xl border border-gray-100">
-              No se encontraron entregas.
-            </div>
-          )}
-        </div>
-
-        {selectedEntrega && (
-          <div className="w-full lg:w-72 bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shrink-0 space-y-4 lg:sticky lg:top-6 text-xs">
-            <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">DETALLE DE ENTREGA</p>
-              <h3 className="font-bold text-gray-900 text-sm leading-snug">{selectedEntrega.title}</h3>
-              <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">{selectedEntrega.description}</p>
-            </div>
-
-            <div className="space-y-2 border-t border-gray-50 pt-3">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Estado</span>
-                <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase ${getBadgeStyle(selectedEntrega.status)}`}>
-                  {selectedEntrega.status}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Fecha límite</span>
-                <span className="font-bold text-gray-800">{selectedEntrega.dueDate}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 font-medium">Formato</span>
-                <span className="font-bold text-gray-800">{selectedEntrega.format}</span>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-50 pt-3 space-y-2">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                Evidencias ({selectedEntrega.evidence?.length || 0})
-              </p>
-
-              {selectedEntrega.evidence && selectedEntrega.evidence.length > 0 ? (
-                <div className="space-y-1.5">
-                  {selectedEntrega.evidence.map((ev) => (
-                    <div key={ev.id} className="flex items-center justify-between p-2 bg-gray-50/80 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700">
-                      <div className="flex items-center gap-1.5 truncate max-w-[170px]">
-                        {ev.isLink ? (
-                          <LinkIcon size={13} className="text-blue-600 shrink-0" />
-                        ) : (
-                          <FileText size={13} className="text-slate-700 shrink-0" />
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => abrirEvidenciaUrl(ev.url)}
-                          className="truncate hover:underline text-slate-800 font-bold text-left cursor-pointer"
-                          title={ev.url}
-                        >
-                          {ev.url}
-                        </button>
-                      </div>
-                      <button 
-                        onClick={() => handleEliminarEvidencia(ev.id)}
-                        className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0"
-                        title="Eliminar evidencia"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400 italic">Sin evidencias.</p>
-              )}
-
-              <button 
-                onClick={() => abrirModalSubida(selectedEntrega.id)}
-                className="w-full py-2 bg-gray-50 border border-dashed border-gray-200 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer mt-2"
-              >
-                <Paperclip size={13} /> Adjuntar archivo o enlace
-              </button>
-            </div>
-
-            <div className="border-t border-gray-50 pt-3 space-y-2 text-xs">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Historial / próximas entregas</p>
-              <div className="space-y-1.5">
-                {entregas.slice(0, 3).map((item) => (
-                  <div key={item.id} className="flex justify-between text-gray-600 text-[11px]">
-                    <span className="truncate max-w-[130px] font-medium">{item.title}</span>
-                    <span className="font-bold text-gray-800">{item.dueDate}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
-        )}
-
-      </div>
-
-        {modalOpen && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl space-y-4 relative">
-            <h3 className="text-sm font-bold text-gray-900 uppercase">Adjuntar Evidencia</h3>
-            <p className="text-xs text-gray-400">Selecciona el tipo de entrega que deseas registrar.</p>
-
-            <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
-              <button
-                type="button"
-                onClick={() => setActiveTab("file")}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
-                  activeTab === "file" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900"
-                }`}
-              >
-                Archivo local (PDF/DOCX)
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("link")}
-                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition ${
-                  activeTab === "link" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900"
-                }`}
-              >
-                Enlace Web
-              </button>
-            </div>
-
-            {activeTab === "file" && (
-              <div className="space-y-3 py-2 text-center">
-                <div 
-                  onClick={() => !subiendo && fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-200 hover:border-gray-400 p-6 rounded-2xl cursor-pointer transition flex flex-col items-center gap-2 bg-gray-50/50"
-                >
-                  <Upload size={24} className="text-gray-400" />
-                  <p className="text-xs font-bold text-gray-700">
-                    {subiendo ? "Subiendo archivo..." : "Haz clic aquí para examinar tus archivos"}
-                  </p>
-                  <p className="text-[10px] text-gray-400">Formatos soportados: PDF, DOCX, PNG, ZIP</p>
-                </div>
-              </div>
-            )}
-
-            {activeTab === "link" && (
-              <div className="space-y-3 py-2">
-                <label className="block text-xs font-bold text-gray-700">Enlace URL *</label>
-                <input 
-                  type="url"
-                  placeholder="https://drive.google.com/... o https://figma.com/..."
-                  value={linkInput}
-                  onChange={e => setLinkInput(e.target.value)}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:bg-white"
-                />
-                <button
-                  type="button"
-                  onClick={handleGuardarLink}
-                  className="w-full py-2.5 bg-black text-white rounded-xl text-xs font-bold hover:bg-gray-900 transition"
-                >
-                  Guardar enlace
-                </button>
-              </div>
-            )}
-
-            <div className="flex justify-end pt-2 border-t border-gray-50">
-              <button 
-                type="button"
-                onClick={() => setModalOpen(false)}
-                className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-    </div>
-  );
-};
-
-export const CalendarioPage: React.FC = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold text-gray-900">Calendario</h1>
-  </div>
-);
-
-export const PerfilPage: React.FC = () => (
-  <div className="p-6">
-    <h1 className="text-2xl font-bold text-gray-900">Perfil</h1>
-  </div>
-);
+export default ActividadesPage;
