@@ -5,9 +5,6 @@ import * as z from 'zod';
 import { Link } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api';
 
-/**
- * ESQUEMA DE VALIDACIÓN
- */
 const recoverSchema = z.object({
   email: z
     .string()
@@ -34,7 +31,6 @@ export const RecuperarPassword: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      // NOTA: Asegúrate de que este endpoint exista en tu backend de Node/Express
       const response = await fetch(`${API_BASE_URL}/auth/recover-password`, {
         method: 'POST',
         headers: {
@@ -59,12 +55,12 @@ export const RecuperarPassword: React.FC = () => {
   };
 
   return (
-    <div className="bg-[#F6F7FB] min-h-screen flex flex-col items-center justify-center p-4 font-sans tracking-tight">
+    <div className="bg-background-login min-h-screen flex flex-col items-center justify-center p-4 font-['Inter',sans-serif] tracking-tight">
       
-      {/* SECCIÓN IDENTIDAD VISUAL */}
-      <div className="text-center mb-5">
-        <h1 className="text-[40px] font-bold text-[#111827] tracking-tight mb-0.5">ClassBoard</h1>
-        <div className="flex justify-center gap-4 text-[#687280] text-sm mt-1">
+      {/* IDENTIDAD VISUAL */}
+      <div className="text-center mb-6">
+        <h1 className="text-[48px] font-black text-[#1a1d2e] tracking-tight mb-1">ClassBoard</h1>
+        <div className="flex justify-center gap-4 text-[#6b7280] text-sm mt-1">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
@@ -78,26 +74,24 @@ export const RecuperarPassword: React.FC = () => {
       </div>
 
       {/* TARJETA DEL FORMULARIO */}
-      <div className="bg-white p-9 rounded-[20px] border border-[#E5E7EB] w-full max-w-[400px] shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
+      <div className="bg-white p-8 rounded-2xl border border-border w-full max-w-100 shadow-sm">
         
         <div className="text-center mb-6">
-          <h2 className="text-xl font-bold text-[#111827]">Recuperar contraseña</h2>
-          <p className="text-[14px] text-[#687280] mt-2">
+          <h2 className="text-[20px] font-semibold text-[#1a1d2e]">Recuperar contraseña</h2>
+          <p className="text-[13px] text-[#6b7280] mt-1 font-normal">
             Ingresa tu correo electrónico y te enviaremos instrucciones para restablecer tu contraseña.
           </p>
         </div>
 
-        {/* ALERTA DE ERROR GENERAL */}
         {backendError && !successMessage && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm p-2.5 rounded-xl text-center font-medium">
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-[13px] p-2.5 rounded-xl text-center font-medium">
             {backendError}
           </div>
         )}
 
-        {/* ALERTA DE ÉXITO VISUAL */}
         {successMessage && (
-          <div className="mb-4 bg-[#ECFDF5] border border-[#A7F3D0] text-[#065F46] text-sm p-3 rounded-xl text-center font-medium flex flex-col items-center gap-2">
-            <svg className="w-6 h-6 text-[#10B981]" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+          <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-[13px] p-3 rounded-xl text-center font-medium flex flex-col items-center gap-2">
+            <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             </svg>
             {successMessage}
@@ -107,9 +101,8 @@ export const RecuperarPassword: React.FC = () => {
         {!successMessage ? (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
             
-            {/* CAMPO: EMAIL */}
             <div className="flex flex-col gap-1.5">
-              <label htmlFor="email" className="text-[15px] font-regular text-[#111827]">
+              <label htmlFor="email" className="text-[14px] font-medium text-[#1a1d2e]">
                 Correo electrónico
               </label>
               <input
@@ -117,10 +110,10 @@ export const RecuperarPassword: React.FC = () => {
                 type="email"
                 id="email"
                 placeholder="email@example.com"
-                className={`w-full px-4 py-2.5 rounded-xl text-[#111827] placeholder-[#687280] border focus:outline-none transition-all text-[15px] ${
+                className={`w-full px-4 py-3 rounded-xl text-[#1a1d2e] placeholder-foreground-muted border focus:outline-none transition-all text-[14px] font-normal ${
                   errors.email
                     ? 'bg-red-50 border-2 border-red-500'
-                    : 'bg-[#F6F7FB] border-[#E5E7EB] focus:border-[#94A3BB]'
+                    : 'bg-[#f4f5f8] border-border focus:border-primary'
                 }`}
               />
               {errors.email && (
@@ -128,22 +121,20 @@ export const RecuperarPassword: React.FC = () => {
               )}
             </div>
 
-            {/* BOTÓN DE ENVIAR */}
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full bg-[#0B1026] hover:bg-opacity-95 text-white font-semibold py-3 px-4 rounded-xl transition-all text-[16px] mt-2 disabled:opacity-50 cursor-pointer"
+              className="w-full bg-[#1a1d2e] hover:bg-black text-white font-semibold py-3 px-4 rounded-xl transition-all text-[15px] mt-2 disabled:opacity-50 shadow-sm cursor-pointer"
             >
               {isSubmitting ? 'Enviando...' : 'Enviar enlace'}
             </button>
           </form>
         ) : null}
 
-        {/* REDIRECCIÓN AL LOGIN */}
-        <div className="text-center text-[15px] text-[#687280] mt-6">
+        <div className="text-center text-[13px] text-[#6b7280] mt-6">
           <Link
             to="/login"
-            className="text-[#111827] font-semibold hover:underline flex items-center justify-center gap-1"
+            className="text-primary font-semibold hover:underline flex items-center justify-center gap-1"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
@@ -156,3 +147,5 @@ export const RecuperarPassword: React.FC = () => {
     </div>
   );
 };
+
+export default RecuperarPassword;

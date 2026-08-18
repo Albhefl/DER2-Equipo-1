@@ -433,7 +433,7 @@ export const EstudianteEntregas: React.FC = () => {
                 <div className="space-y-1.5">
                   {selectedEntrega.evidence.map((ev) => (
                     <div key={ev.id} className="flex items-center justify-between p-2 bg-gray-50/80 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700">
-                      <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+                      <div className="flex items-center gap-1.5 truncate max-w-42.5">
                         {ev.isLink ? (
                           <LinkIcon size={13} className="text-blue-600 shrink-0" />
                         ) : (
@@ -475,7 +475,7 @@ export const EstudianteEntregas: React.FC = () => {
               <div className="space-y-1.5">
                 {entregas.slice(0, 3).map((item) => (
                   <div key={item.id} className="flex justify-between text-gray-600 text-[11px]">
-                    <span className="truncate max-w-[130px] font-medium">{item.title}</span>
+                    <span className="truncate max-w-32.5 font-medium">{item.title}</span>
                     <span className="font-bold text-gray-800">{item.dueDate}</span>
                   </div>
                 ))}

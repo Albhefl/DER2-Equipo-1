@@ -141,7 +141,7 @@ interface ToastMsg {
 function ToastContainer({ toasts, onClose }: { toasts: ToastMsg[]; onClose: (id: number) => void }) {
   if (toasts.length === 0) return null;
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 w-[calc(100%-2rem)] sm:w-auto sm:max-w-sm">
+    <div className="fixed bottom-4 right-4 z-100 flex flex-col gap-2 w-[calc(100%-2rem)] sm:w-auto sm:max-w-sm">
       {toasts.map(t => (
         <div
           key={t.id}
@@ -652,7 +652,7 @@ export const ActividadesPage: React.FC = () => {
   const renderConfirmModal = () => {
     if (!confirmState) return null;
     return (
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-70 p-4">
         <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl space-y-4">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0">
@@ -817,7 +817,7 @@ export const ActividadesPage: React.FC = () => {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
               <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Descripción</h3>
-              <p className="text-xs text-gray-600 leading-relaxed break-words">
+              <p className="text-xs text-gray-600 leading-relaxed wrap-break-word">
                 {vistaDetalle.description || 'Sin descripción registrada.'}
               </p>
 
@@ -858,7 +858,7 @@ export const ActividadesPage: React.FC = () => {
                           )}
                         </div>
                       </div>
-                      <p className="text-gray-600 leading-normal break-words">{c.content}</p>
+                      <p className="text-gray-600 leading-normal wrap-break-word">{c.content}</p>
                     </div>
                   </div>
                 ))}
@@ -966,10 +966,10 @@ export const ActividadesPage: React.FC = () => {
                 <span>Creada el</span>
                 <span className="font-bold text-gray-800">{formatearFechaHora(vistaDetalle.createdAt)}</span>
               </div>
-              <div className="flex justify-between text-gray-500">
-                <span>Creada por</span>
+              {/*<div className="flex justify-between text-gray-500">
+                /*<span>Creada por</span>
                 <span className="font-bold text-gray-800">{vistaDetalle.creator?.name || 'No disponible'}</span>
-              </div>
+              </div>*/}
             </div>
           </div>
         </div>

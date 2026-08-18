@@ -226,11 +226,11 @@ export const EvaluadorDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="w-full lg:w-[280px] space-y-4 shrink-0">
+        <div className="w-full lg:w-70 space-y-4 shrink-0">
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40">
             <h4 className="font-bold text-gray-900 text-[14px] mb-1">Actividades recientes</h4>
             <p className="text-xs text-gray-400 mb-4">{actividadesPendientes} pendientes</p>
-            <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+            <div className="space-y-3 max-h-87.5 overflow-y-auto pr-1">
               {loading ? (
                 <p className="text-xs text-gray-400 text-center py-4">Cargando...</p>
               ) : actividades.length > 0 ? (
@@ -238,7 +238,7 @@ export const EvaluadorDashboard: React.FC = () => {
                   <div key={act.id} className="p-3.5 border border-gray-100 rounded-xl flex flex-col gap-2 bg-white hover:border-gray-200 transition-colors">
                     <p className="text-xs font-bold text-gray-950 truncate">{act.name}</p>
                     <div className="flex justify-between items-center">
-                      <span className="text-[11px] text-gray-400 font-medium truncate max-w-[120px]">
+                      <span className="text-[11px] text-gray-400 font-medium truncate max-w-30">
                         {act.project?.name || 'ClassBoard'}
                       </span>
                       <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${getBadgeStyle(act.status)}`}>

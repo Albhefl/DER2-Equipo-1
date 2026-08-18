@@ -36,13 +36,13 @@ const CHART_COLORS = ["#94a3b8", "#3b82f6", "#f59e0b", "#22c55e"];
 
 function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-3 sm:p-4 flex items-center gap-3 shadow-xs box-border min-w-0">
+    <div className="bg-white rounded-2xl border border-border p-3 sm:p-4 flex items-center gap-3 shadow-sm box-border min-w-0 font-['Inter',sans-serif]">
       <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
         {icon}
       </div>
       <div className="min-w-0 flex-1">
-        <p className="text-xl sm:text-2xl font-bold text-gray-900 leading-none mb-1 truncate">{value}</p>
-        <p className="text-[11px] sm:text-xs text-gray-400 font-medium truncate">{label}</p>
+        <p className="text-xl sm:text-2xl font-bold text-[#1a1d2e] leading-none mb-1 truncate">{value}</p>
+        <p className="text-[11px] sm:text-xs text-[#6b7280] font-medium truncate lowercase first-letter:uppercase">{label}</p>
       </div>
     </div>
   );
@@ -132,34 +132,31 @@ export const EstudianteDashboard: React.FC = () => {
     });
 
   return (
-    <div className="p-4 sm:p-6 w-full max-w-full space-y-6 box-border font-sans text-gray-900 overflow-x-hidden">
+    <div className="p-4 sm:p-6 w-full max-w-full space-y-6 box-border font-['Inter',sans-serif] text-[#1a1d2e] overflow-x-hidden bg-[#f4f5f8] min-h-screen">
       {/* TÍTULO */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight truncate">Dashboard del Estudiante</h1>
-        <p className="text-xs sm:text-sm text-gray-400 font-medium mt-0.5 truncate">
-          {projectIdParam ? "Filtrado por proyecto seleccionado" : "Proyecto: ClassBoard Equipo A"}
-        </p>
+        <h1 className="text-2xl font-bold text-[#1a1d2e] tracking-tight truncate">Dashboard del Estudiante</h1>
       </div>
 
       {loading ? (
-        <div className="py-12 text-center text-xs text-gray-400 font-medium bg-white rounded-2xl border border-gray-100">Cargando métricas en tiempo real...</div>
+        <div className="py-12 text-center text-xs text-foreground-muted font-medium bg-white rounded-2xl border border-border">Cargando métricas en tiempo real...</div>
       ) : error ? (
-        <div className="py-6 text-center text-xs text-red-500 font-bold bg-red-50 rounded-2xl border border-red-100">{error}</div>
+        <div className="py-6 text-center text-xs text-destructive] font-bold bg-red-50 rounded-2xl border border-red-100">{error}</div>
       ) : (
         <>
-          {/* MÉTRICAS / STAT CARDS RESPONSIVAS (2 cols en móvil, 5 en desktop) */}
+          {/* 1. MÉTRICAS / STAT CARDS ARRIBA A TODO EL ANCHO (Como en Figma) */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 w-full">
-            <StatCard label="Total de actividades" value={totalActividades} color="bg-indigo-50 text-indigo-600" icon={<ListChecks size={18} />} />
-            <StatCard label="Pendientes" value={pendientes} color="bg-gray-50 text-gray-400" icon={<Clock size={18} />} />
-            <StatCard label="En proceso" value={enProceso} color="bg-blue-50 text-blue-600" icon={<AlertCircle size={18} />} />
-            <StatCard label="En revisión" value={enRevision} color="bg-amber-50 text-amber-600" icon={<Eye size={18} />} />
-            <StatCard label="Completadas" value={completadas} color="bg-green-50 text-green-600" icon={<CheckCircle2 size={18} />} />
+            <StatCard label="total de actividades" value={totalActividades} color="bg-[#ede9fe] text-primary" icon={<ListChecks size={18} />} />
+            <StatCard label="pendientes" value={pendientes} color="bg-[#eef0f6] text-[#6b7280]" icon={<Clock size={18} />} />
+            <StatCard label="en proceso" value={enProceso} color="bg-[#dbeafe] text-[#3b82f6]" icon={<AlertCircle size={18} />} />
+            <StatCard label="en revisión" value={enRevision} color="bg-[#fef3c7] text-[#f59e0b]" icon={<Eye size={18} />} />
+            <StatCard label="completadas" value={completadas} color="bg-[#dcfce7] text-[#22c55e]" icon={<CheckCircle2 size={18} />} />
           </div>
 
-          {/* SECCIÓN INTERACTIVA DE DOS COLUMNAS */}
+          {/* 2. SECCIÓN PRINCIPAL DE DOS COLUMNAS */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start w-full">
             
-            {/* COLUMNA IZQUIERDA */}
+            {/* COLUMNA IZQUIERDA (Barra de progreso arriba, luego gráficos y actividades) */}
             <div className="lg:col-span-2 space-y-6 w-full min-w-0">
               
               {/* BARRA DE PROGRESO GENERAL */}
@@ -169,17 +166,17 @@ export const EstudianteDashboard: React.FC = () => {
               />
 
               {/* GRÁFICA DE RECHARTS POR ESTADO */}
-              <div className="bg-white border border-gray-100 p-4 sm:p-6 rounded-2xl shadow-xs">
-                <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-4">
-                  Progreso por estado
+              <div className="bg-white border border-border p-4 sm:p-6 rounded-2xl shadow-sm">
+                <h3 className="text-xs sm:text-sm font-bold text-[#1a1d2e] mb-4 lowercase first-letter:uppercase">
+                  progreso por estado
                 </h3>
-                <div className="w-full h-[180px]">
+                <div className="w-full h-45">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={chartData} barSize={28}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f8fafc" vertical={false} />
-                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} allowDecimals={false} />
-                      <Tooltip cursor={{ fill: "#f8fafc" }} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#eef0f6" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip cursor={{ fill: "#eef0f6" }} />
                       <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                         {chartData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i]} />)}
                       </Bar>
@@ -194,29 +191,29 @@ export const EstudianteDashboard: React.FC = () => {
                 miembrosEquipo={miembrosEquipo}
               />
 
-              {/* PRÓXIMAS ACTIVIDADES */}
-              <div className="bg-white border border-gray-100 p-4 sm:p-6 rounded-2xl shadow-xs">
-                <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-3">
-                  Próximas actividades
+              {/* PRÓXIMAS ACTIVIDADES 
+              <div className="bg-white border border-border p-4 sm:p-6 rounded-2xl shadow-sm">
+                <h3 className="text-xs sm:text-sm font-bold text-[#1a1d2e] mb-3 lowercase first-letter:uppercase">
+                  próximas actividades
                 </h3>
                 <div className="flex flex-col">
                   {proximasActividades.length > 0 ? (
                     proximasActividades.map((a) => (
-                      <div key={a.id} className="flex items-center justify-between py-3 border-b border-gray-50 last:border-0 gap-2">
+                      <div key={a.id} className="flex items-center justify-between py-3 border-b border-[#eef0f6] last:border-0 gap-2">
                         <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                          <Circle size={14} className="text-gray-300 shrink-0" />
-                          <span className="text-xs sm:text-sm font-medium text-gray-800 truncate">{a.name}</span>
+                          <Circle size={14} className="text-foreground-muted shrink-0" />
+                          <span className="text-xs sm:text-sm font-medium text-[#1a1d2e] truncate">{a.name}</span>
                         </div>
-                        <span className="text-[11px] sm:text-xs text-gray-400 font-medium shrink-0 pl-2">
+                        <span className="text-[11px] sm:text-xs text-[#6b7280] font-medium shrink-0 pl-2">
                           {new Date(a.deadline).toLocaleDateString("es-MX")}
                         </span>
                       </div>
                     ))
                   ) : (
-                    <p className="text-xs text-gray-400 py-3 text-center">No hay actividades pendientes próximas.</p>
+                    <p className="text-xs text-[#6b7280] py-3 text-center">No hay actividades pendientes próximas.</p>
                   )}
                 </div>
-              </div>
+              </div>*/}
 
             </div>
 
@@ -224,39 +221,39 @@ export const EstudianteDashboard: React.FC = () => {
             <div className="space-y-6 w-full min-w-0">
               
               {/* IR AL TABLERO KANBAN */}
-              <div className="bg-white border border-gray-100 p-5 sm:p-6 rounded-2xl shadow-xs flex flex-col items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-gray-900">
+              <div className="bg-white border border-border p-5 sm:p-6 rounded-2xl shadow-sm flex flex-col items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-[#eef0f6] flex items-center justify-center text-[#1a1d2e]">
                   <LayoutGrid size={22} />
                 </div>
-                <p className="text-xs sm:text-sm font-bold text-gray-900 text-center">Ir al tablero Kanban</p>
+                <p className="text-xs sm:text-sm font-bold text-[#1a1d2e] text-center lowercase first-letter:uppercase">ir al tablero kanban</p>
                 <button
                   type="button"
                   onClick={() => navigate(`/estudiante-kanban${projectIdParam ? `?projectId=${projectIdParam}` : ''}`)}
-                  className="w-full py-2.5 bg-[#0B1026] text-white rounded-xl text-xs font-semibold hover:opacity-95 transition-all shadow-xs cursor-pointer"
+                  className="w-full py-2.5 bg-[#1a1d2e] text-white rounded-xl text-xs font-semibold hover:bg-black transition-all shadow-sm cursor-pointer"
                 >
                   Ir al tablero
                 </button>
               </div>
 
               {/* ACTIVIDAD RECIENTE */}
-              <div className="bg-white border border-gray-100 p-4 sm:p-6 rounded-2xl shadow-xs">
-                <h3 className="text-xs sm:text-sm font-bold text-gray-900 mb-3">
-                  Actividad reciente
+              <div className="bg-white border border-border p-4 sm:p-6 rounded-2xl shadow-sm">
+                <h3 className="text-xs sm:text-sm font-bold text-[#1a1d2e] mb-3 lowercase first-letter:uppercase">
+                  actividad reciente
                 </h3>
                 {recentLogs.length > 0 ? (
                   <div className="flex flex-col gap-3.5">
                     {recentLogs.map((l) => (
                       <div key={l.id} className="flex gap-2.5 items-start">
-                        <div className="w-1.5 h-1.5 rounded-full bg-black mt-1.5 shrink-0" />
+                        <div className="w-1.5 h-1.5 rounded-full bg-[#1a1d2e] mt-1.5 shrink-0" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-medium text-gray-800 leading-snug break-words">{l.action}</p>
-                          <p className="text-[11px] text-gray-400 mt-0.5">{l.time}</p>
+                          <p className="text-xs font-medium text-[#1a1d2e] leading-snug wrap-break-word">{l.action}</p>
+                          <p className="text-[11px] text-foreground-muted mt-0.5">{l.time}</p>
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400 py-3 text-center">No hay actividad reciente registrada.</p>
+                  <p className="text-xs text-[#6b7280] py-3 text-center">No hay actividad reciente registrada.</p>
                 )}
               </div>
 
