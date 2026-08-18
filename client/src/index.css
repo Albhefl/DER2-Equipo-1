@@ -1,38 +1,61 @@
+/* 0. Import de Google Fonts DEBE ir antes que cualquier otra regla, incluido @import "tailwindcss" */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
 @import "tailwindcss";
 
 @layer base {
   body {
-    /* 1. CORRECCIÓN BUG 05: Aplicando la fuente 'Inter' de Figma globalmente */
+    /* CORRECCIÓN: antes 'Inter' nunca se importaba y caía al fallback del sistema */
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px; /* tamaño base del documento, según spec */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-color: #F8FAFC;
-    color: #0F172A;
+    /* CORRECCIÓN: antes #F8FAFC / #0F172A (slate), ahora alineado a la paleta real del proyecto */
+    background-color: var(--color-background);
+    color: var(--color-foreground);
   }
 
-  /* 2. CORRECCIÓN DEL "OJITO" DOBLE: Ocultar el icono nativo en Microsoft Edge */
+  /* Ocultar el icono nativo de "ojito" duplicado en Microsoft Edge */
   input::-ms-reveal,
   input::-ms-clear {
     display: none;
   }
 }
 
-/* Tokens de diseño sincronizados con Figma */
+/* Tokens de diseño sincronizados con la paleta documentada del proyecto (no con Figma genérico) */
 @theme {
-  --color-background: #F8FAFC;
-  --color-foreground: #0F172A;
+  /* Fondos */
+  --color-background: #f4f5f8;      /* Fondo de página (app) */
+  --color-background-login: #e8ecf2; /* Fondo de pantalla de login */
+  --color-surface: #eef0f6;          /* Superficies neutras */
 
-  --color-primary: #0F172A;
-  --color-primary-foreground: #FFFFFF;
+  /* Texto */
+  --color-foreground: #1a1d2e;        /* Texto principal */
+  --color-foreground-secondary: #6b7280; /* Texto secundario */
+  --color-foreground-muted: #9ca3af;     /* Texto muted / subtítulos */
 
-  --color-secondary: #F1F5F9;
-  --color-secondary-foreground: #0F172A;
+  /* Marca / primario */
+  --color-primary: #4f46e5;           /* Índigo */
+  --color-primary-foreground: #ffffff;
+  --color-accent-light: #ede9fe;
 
-  --color-card: #FFFFFF;
-  --color-card-foreground: #0F172A;
+  /* Sidebar */
+  --color-sidebar: #1a1d2e;
+  --color-sidebar-foreground: #ffffff;
 
-  --color-border: #F1F5F9;
+  /* Cards / paneles */
+  --color-card: #ffffff;
+  --color-card-foreground: #1a1d2e;
 
-  --color-muted: #F8FAFC;
-  --color-muted-foreground: #64748B;
+  /* Secundario (superficies neutras internas: headers de tabla, chips) */
+  --color-secondary: #eef0f6;
+  --color-secondary-foreground: #1a1d2e;
+
+  --color-muted: #f4f5f8;
+  --color-muted-foreground: #6b7280;
+
+  /* Bordes / hairlines */
+  --color-border: rgba(0, 0, 0, 0.08);
+
+  /* Estado / feedback */
+  --color-destructive: #ef4444;
 }

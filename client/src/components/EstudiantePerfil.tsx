@@ -27,15 +27,17 @@ function initials(name: string) {
   return name.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase();
 }
 
+// 🎨 CAMBIADO: min-w-0 + truncate para que el valor numérico o el label largo
+// nunca empujen el layout ni desborden la tarjeta en pantallas angostas.
 function StatCard({ label, value, color, icon }: { label: string; value: number; color: string; icon: React.ReactNode }) {
   return (
-    <div className="bg-card rounded-xl border border-border p-4 flex items-center gap-3">
+    <div className="bg-card rounded-xl border border-border p-4 flex items-center gap-3 min-w-0">
       <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
         {icon}
       </div>
-      <div>
-        <p className="text-lg font-black text-foreground leading-none">{value}</p>
-        <p className="text-[11px] text-muted-foreground font-semibold mt-1">{label}</p>
+      <div className="min-w-0">
+        <p className="text-lg font-black text-foreground leading-none tabular-nums">{value}</p>
+        <p className="text-[11px] font-semibold mt-1 text-foreground-muted truncate">{label}</p>
       </div>
     </div>
   );
@@ -47,7 +49,7 @@ export const EstudiantePerfil: React.FC = () => {
   const [errorSubida, setErrorSubida] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 🟢 NUEVO: el archivo seleccionado se guarda aquí, no se sube todavía
+  // 🟢 el archivo seleccionado se guarda aquí, no se sube todavía
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -134,7 +136,7 @@ export const EstudiantePerfil: React.FC = () => {
     };
   }, [previewUrl]);
 
-  // 🟢 CAMBIADO: ya no sube nada al servidor. Solo guarda el archivo
+  // 🟢 ya no sube nada al servidor. Solo guarda el archivo
   // seleccionado y genera una previsualización local (URL.createObjectURL).
   // La subida real ocurre en handleGuardarCambios().
   const handleSeleccionarFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -151,7 +153,7 @@ export const EstudiantePerfil: React.FC = () => {
     if (e.target) e.target.value = '';
   };
 
-  // 🟢 NUEVO: sube la foto pendiente al servidor (se llama desde Guardar cambios)
+  // 🟢 sube la foto pendiente al servidor (se llama desde Guardar cambios)
   const subirFotoPendiente = async (): Promise<string | null> => {
     if (!selectedFile) return null;
 
@@ -178,7 +180,7 @@ export const EstudiantePerfil: React.FC = () => {
     setDraft(d => ({ ...d, [k]: e.target.value }));
   };
 
-  // 🟢 CAMBIADO: ahora es async. Si hay una foto pendiente, primero la sube;
+  // 🟢 ahora es async. Si hay una foto pendiente, primero la sube;
   // solo si eso tiene éxito continúa guardando el resto del perfil.
   const handleGuardarCambios = async () => {
     setSaving(true);
@@ -232,36 +234,68 @@ export const EstudiantePerfil: React.FC = () => {
     { label: "Semestre", key: "semester", icon: <CalendarDays size={14} /> },
   ];
 
-  // 🟢 NUEVO: qué imagen mostrar en el avatar (previsualización local > la guardada)
+  // 🟢 qué imagen mostrar en el avatar (previsualización local > la guardada)
   const avatarSrc = previewUrl || (profile.profilePicture ? `${SERVER_URL}/uploads/${profile.profilePicture}` : null);
 
+  // 🎨 NUEVO: tokens de la paleta, escopados a este componente vía CSS custom
+  // properties en el nodo raíz. Como bg-card / text-foreground / border-border
+  // etc. ya se resuelven contra estas variables, todo el árbol hereda los
+  // valores nuevos sin tocar el tema global ni ninguna función del componente.
+  const paletteVars = {
+    ['--color-background' as string]: '#f4f5f8',
+    ['--color-foreground' as string]: '#1a1d2e',
+    ['--color-primary' as string]: '#4f46e5',
+    ['--color-primary-foreground' as string]: '#ffffff',
+    ['--color-border' as string]: 'rgba(0,0,0,0.08)',
+    ['--color-card' as string]: '#ffffff',
+    ['--color-muted' as string]: '#f4f5f8',
+    ['--color-muted-foreground' as string]: '#6b7280',
+    ['--color-secondary' as string]: '#f4f5f8',
+    ['--color-secondary-foreground' as string]: '#1a1d2e',
+    ['--color-input-background' as string]: '#ffffff',
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+  } as React.CSSProperties;
+
   return (
-    <div className="p-6 flex flex-col gap-5 max-w-3xl">
+    // 🎨 CAMBIADO: w-full + overflow-x-hidden + box-border en la raíz para
+    // que el componente nunca se desborde de su contenedor padre, sin
+    // importar el ancho de pantalla.
+    <div
+      className="p-6 flex flex-col gap-5 w-full max-w-3xl mx-auto box-border overflow-x-hidden"
+      style={paletteVars}
+    >
+      {/* 🎨 Import de Inter (400/500/600/700/900) que pide la especificación */}
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+      `}</style>
+
       <input type="file" ref={fileInputRef} onChange={handleSeleccionarFoto} accept="image/*" className="hidden" />
 
       {/* Alerta visual elegante en caso de error */}
       {errorSubida && (
-        <div className="bg-red-50 border border-red-200 text-red-600 text-xs p-3 rounded-xl font-medium flex items-center gap-2">
-          <AlertCircle size={16} /> {errorSubida}
+        <div className="bg-red-50 border border-red-200 text-red-600 text-xs p-3 rounded-xl font-medium flex items-start gap-2 wrap-break-word">
+          <AlertCircle size={16} className="shrink-0 mt-0.5" /> <span className="min-w-0">{errorSubida}</span>
         </div>
       )}
 
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Perfil</h1>
-          <p className="text-sm text-muted-foreground">Gestiona tu información personal</p>
+      {/* 🎨 CAMBIADO: flex-wrap para que en móvil el título y los botones
+          no se corten ni empujen el layout fuera de pantalla */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Perfil</h1>
+          <p className="text-sm text-[#6b7280]">Gestiona tu información personal</p>
         </div>
 
         {!isEditing ? (
           <button
             type="button"
             onClick={() => setIsEditing(true)}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition cursor-pointer shrink-0"
           >
             <Edit2 size={15} /> Editar
           </button>
         ) : (
-          <div className="flex gap-2">
+          <div className="flex gap-2 shrink-0 flex-wrap">
             <button
               type="button"
               onClick={handleCancelar}
@@ -283,7 +317,9 @@ export const EstudiantePerfil: React.FC = () => {
       </div>
 
       {/* Avatar con soporte de imagen real, previsualización local o iniciales */}
-      <div className="bg-card rounded-xl border border-border p-6 flex items-center gap-5">
+      {/* 🎨 CAMBIADO: flex-wrap + min-w-0 + wrap-break-word para que un nombre o
+          universidad largos nunca desborden la tarjeta */}
+      <div className="bg-card rounded-xl border border-border p-6 flex items-center gap-5 flex-wrap">
         <div className="relative group shrink-0">
           {avatarSrc ? (
             <img
@@ -297,12 +333,14 @@ export const EstudiantePerfil: React.FC = () => {
             </div>
           )}
 
-          {/* 🟢 CAMBIADO: el botón de la cámara solo aparece en modo edición */}
+          {/* 🟢 el botón de la cámara solo aparece en modo edición */}
+          {/* 🎨 CAMBIADO: bg-black/hover:bg-gray-800 → bg-primary, coherente
+              con el acento índigo del resto de la interfaz */}
           {isEditing && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="absolute bottom-0 right-0 p-1.5 bg-black text-white rounded-full shadow hover:bg-gray-800 transition cursor-pointer"
+              className="absolute bottom-0 right-0 p-1.5 bg-primary text-primary-foreground rounded-full shadow hover:bg-primary/90 transition cursor-pointer"
               title="Cambiar foto de perfil"
             >
               <Upload size={12} />
@@ -310,11 +348,11 @@ export const EstudiantePerfil: React.FC = () => {
           )}
         </div>
 
-        <div>
-          <h2 className="text-xl font-bold text-foreground">{profile.name}</h2>
-          <p className="text-sm text-muted-foreground">{profile.role} · {profile.university}</p>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-xl font-bold text-foreground truncate">{profile.name}</h2>
+          <p className="text-sm text-[#6b7280] truncate">{profile.role} · {profile.university}</p>
 
-          {/* 🟢 CAMBIADO: el enlace de texto también solo aparece editando */}
+          {/* 🟢 el enlace de texto también solo aparece editando */}
           {isEditing && (
             <button
               type="button"
@@ -325,7 +363,7 @@ export const EstudiantePerfil: React.FC = () => {
             </button>
           )}
           {isEditing && selectedFile && (
-            <p className="text-[11px] text-muted-foreground mt-1">
+            <p className="text-[11px] text-foreground-muted mt-1">
               Se guardará al hacer clic en "Guardar cambios".
             </p>
           )}
@@ -335,31 +373,33 @@ export const EstudiantePerfil: React.FC = () => {
       {/* Información personal */}
       <div className="bg-card rounded-xl border border-border p-6">
         <h3 className="text-sm font-semibold text-foreground mb-5">Información personal</h3>
-        <div className="grid grid-cols-2 gap-4">
+        {/* 🎨 CAMBIADO: grid-cols-1 en móvil, 2 columnas desde sm, y min-w-0
+            en cada celda para que valores largos no empujen el grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {campos.map(f => (
-            <div key={f.key} className="flex flex-col gap-1">
-              <label className="text-xs text-muted-foreground flex items-center gap-1">{f.icon} {f.label}</label>
+            <div key={f.key} className="flex flex-col gap-1 min-w-0">
+              <label className="text-xs text-foreground-muted flex items-center gap-1">{f.icon} {f.label}</label>
               {!isEditing ? (
-                <p className="text-sm font-medium text-foreground">{profile[f.key] as string}</p>
+                <p className="text-sm font-medium text-foreground wrap-break-word">{profile[f.key] as string}</p>
               ) : (
                 <input
                   value={draft[f.key] as string}
                   onChange={setField(f.key)}
-                  className="px-3 py-2 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
+                  className="w-full min-w-0 px-3 py-2 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
                 />
               )}
             </div>
           ))}
-          <div className="col-span-2 flex flex-col gap-1">
-            <label className="text-xs text-muted-foreground">Biografía</label>
+          <div className="col-span-full sm:col-span-2 flex flex-col gap-1 min-w-0">
+            <label className="text-xs text-foreground-muted">Biografía</label>
             {!isEditing ? (
-              <p className="text-sm text-muted-foreground">{profile.bio}</p>
+              <p className="text-sm text-[#6b7280] wrap-break-word">{profile.bio}</p>
             ) : (
               <textarea
                 value={draft.bio}
                 onChange={setField("bio")}
                 rows={3}
-                className="px-3 py-2 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
+                className="w-full min-w-0 px-3 py-2 rounded-lg border border-border bg-input-background text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
               />
             )}
           </div>

@@ -47,9 +47,9 @@ type EditDraft = {
 };
 
 function priorityBg(p?: PrioridadActividad) {
-  if (p === "HIGH") return "bg-red-50 text-red-600 border border-red-100";
-  if (p === "LOW") return "bg-green-50 text-green-600 border border-green-100";
-  return "bg-amber-50 text-amber-600 border border-amber-100";
+  if (p === "HIGH") return "bg-red-100 text-red-700 border border-red-200";
+  if (p === "LOW") return "bg-green-100 text-green-700 border border-green-200";
+  return "bg-amber-100 text-amber-700 border border-amber-200";
 }
 
 type VencimientoColor = "verde" | "naranja" | "rojo" | "neutral";
@@ -75,13 +75,13 @@ function vencimientoEstilos(color: VencimientoColor) {
     case "verde": return { text: "text-green-600", dot: "bg-green-500" };
     case "naranja": return { text: "text-amber-600", dot: "bg-amber-500" };
     case "rojo": return { text: "text-red-600", dot: "bg-red-500" };
-    default: return { text: "text-gray-400", dot: "bg-gray-300" };
+    default: return { text: "text-foreground-muted", dot: "bg-[#9ca3af]" };
   }
 }
 
 function columnStyle(estado: EstadoActividad) {
   switch (estado) {
-    case "PENDING": return { border: "border-gray-200", header: "bg-gray-50/75 text-slate-400", dot: "bg-slate-400" };
+    case "PENDING": return { border: "border-border", header: "bg-gray-50/75 text-foreground-muted", dot: "bg-[#9ca3af]" };
     case "IN_PROCESS": return { border: "border-blue-100", header: "bg-blue-50/60 text-blue-500", dot: "bg-blue-500" };
     case "IN_REVIEW": return { border: "border-amber-100", header: "bg-amber-50/60 text-amber-500", dot: "bg-amber-500" };
     case "DONE": return { border: "border-green-100", header: "bg-green-50/60 text-green-500", dot: "bg-green-500" };
@@ -130,23 +130,16 @@ export const EstudianteKanban: React.FC = () => {
   const [asignando, setAsignando] = useState(false);
 
   // --- Drag & drop MANUAL (pointer events), sin usar la API nativa de HTML5 DnD ---
-  // La API nativa (draggable + dataTransfer) delega en el sistema operativo para
-  // generar la imagen de arrastre, y en ciertos equipos/extensiones/entornos
-  // remotos eso puede colgar el navegador entero justo al iniciar el drag.
-  // Con pointer events todo el arrastre se resuelve en JS puro, sin tocar el OS.
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<EstadoActividad | null>(null);
   const [dragErrorMsg, setDragErrorMsg] = useState<string | null>(null);
 
   const handleCardPointerDown = (e: React.PointerEvent<HTMLDivElement>, card: Actividad) => {
-    // No iniciar arrastre si el clic empezó en un botón (editar/eliminar)
     if ((e.target as HTMLElement).closest("button")) return;
-    if (e.button !== undefined && e.button !== 0) return; // solo clic izquierdo / touch
+    if (e.button !== undefined && e.button !== 0) return;
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {
-      // Si el navegador no soporta pointer capture en este contexto, seguimos igual
-    }
+    } catch {}
     setDraggingId(card.id);
     setDropTarget(null);
   };
@@ -163,9 +156,7 @@ export const EstudianteKanban: React.FC = () => {
     if (!draggingId) return;
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {
-      // no-op
-    }
+    } catch {}
     const id = draggingId;
     const destino = dropTarget;
     setDraggingId(null);
@@ -175,7 +166,6 @@ export const EstudianteKanban: React.FC = () => {
     }
   };
 
-  // Red de seguridad: si algo deja el arrastre "atorado", Escape lo cancela
   useEffect(() => {
     if (!draggingId) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -188,7 +178,6 @@ export const EstudianteKanban: React.FC = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [draggingId]);
 
-  // --- Confirmación de borrado no bloqueante (reemplaza confirm()) ---
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [eliminando, setEliminando] = useState(false);
 
@@ -238,7 +227,6 @@ export const EstudianteKanban: React.FC = () => {
     fetchProyectos();
   }, []);
 
-  // Auto-ocultar el banner de error de drag después de unos segundos
   useEffect(() => {
     if (!dragErrorMsg) return;
     const t = setTimeout(() => setDragErrorMsg(null), 6000);
@@ -294,12 +282,10 @@ export const EstudianteKanban: React.FC = () => {
     }
   };
 
-  // 🟢 Función de cambio de estado optimista (actualiza UI al instante y luego el servidor)
   const cambiarEstadoActividad = async (id: string, nuevoEstado: EstadoActividad) => {
     const actividadOriginal = actividades.find(a => a.id === id);
     if (!actividadOriginal || actividadOriginal.status === nuevoEstado) return;
 
-    // Actualización visual inmediata para evitar bloqueos
     setActividades(prev => prev.map(a => a.id === id ? { ...a, status: nuevoEstado } : a));
 
     try {
@@ -319,10 +305,8 @@ export const EstudianteKanban: React.FC = () => {
       if (!response.ok) throw new Error(data.message || "No se pudo actualizar el estado.");
       setActividades(prev => prev.map(a => (a.id === data.actividad.id ? data.actividad : a)));
     } catch (err: any) {
-      // ⚠️ Antes: alert(...) — bloqueaba el hilo de JS (y en iframes/preview
-      // sandboxed ni siquiera muestra el diálogo, dejando la pantalla "congelada").
       setDragErrorMsg(err.message || "No se pudo mover la tarjeta. Se restauró el estado original.");
-      fetchActividades(); // Recargar datos originales si falla
+      fetchActividades();
     }
   };
 
@@ -397,7 +381,6 @@ export const EstudianteKanban: React.FC = () => {
     }
   };
 
-  // El botón de la tarjeta ahora solo abre la confirmación (no bloquea el hilo)
   const removeCard = (id: string) => {
     setPendingDeleteId(id);
   };
@@ -432,80 +415,98 @@ export const EstudianteKanban: React.FC = () => {
     navigate(val ? `/estudiante-kanban?projectId=${val}` : "/estudiante-kanban");
   };
 
-  return (
-    <div className="w-full max-w-full space-y-6 box-border">
+  const paletteVars = {
+    ['--color-primary' as string]: '#4f46e5',
+    ['--color-primary-foreground' as string]: '#ffffff',
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+  } as React.CSSProperties;
 
-      {/* ENCABEZADO Y FILTROS */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Tablero Kanban</h1>
-          <p className="text-sm text-gray-500 font-medium mt-0.5">
+  return (
+    <div className="w-full max-w-full space-y-6 box-border overflow-x-hidden" style={paletteVars}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap');
+      `}</style>
+
+      {/* ENCABEZADO Y FILTROS REORGANIZADOS */}
+      <div className="flex flex-col gap-4">
+        
+        {/* TÍTULO Y SUBTÍTULO */}
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold text-[#1a1d2e] tracking-tight">Tablero Kanban</h1>
+          <p className="text-sm text-[#6b7280] font-medium mt-0.5 wrap-break-word">
             {proyectoActivo ? `Proyecto: ${proyectoActivo.name}` : "Mostrando actividades de todos tus proyectos"}
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto flex-wrap">
-          <div className="relative w-full sm:w-44">
-            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        {/* BARRA DE BÚSQUEDA Y FILTROS CON NOMBRES OPTIMIZADOS */}
+        <div className="flex flex-wrap items-center gap-2.5 w-full">
+          {/* Búsqueda */}
+          <div className="relative flex-1 min-w-45 sm:max-w-xs">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted" />
             <input
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar tarjeta..."
-              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40"
+              className="w-full pl-9 pr-3 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40"
             />
           </div>
 
-          <div className="relative w-full sm:w-44">
-            <FolderOpen size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          {/* Proyecto */}
+          <div className="relative min-w-35 flex-1 sm:flex-initial">
+            <FolderOpen size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted pointer-events-none" />
             <select
               value={projectIdParam || ""}
               onChange={e => handleFiltroProyectoChange(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40 cursor-pointer"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
             >
-              <option value="">Todos los proyectos</option>
+              <option value="">Proyecto: Todos</option>
               {proyectos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
 
-          <div className="relative w-full sm:w-40">
-            <UserPlus size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          {/* Responsable */}
+          <div className="relative min-w-35 flex-1 sm:flex-initial">
+            <UserPlus size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted pointer-events-none" />
             <select
               value={filtroResponsable}
               onChange={e => setFiltroResponsable(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40 cursor-pointer"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
             >
-              <option value="">Todos los responsables</option>
+              <option value="">Responsable: Todos</option>
               {responsablesDisponibles.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
             </select>
           </div>
 
-          <div className="relative w-full sm:w-40">
-            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          {/* Prioridad */}
+          <div className="relative min-w-32.5 flex-1 sm:flex-initial">
+            <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted pointer-events-none" />
             <select
               value={filtroPrioridad}
               onChange={e => setFiltroPrioridad(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40 cursor-pointer"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
             >
-              <option value="">Todas las prioridades</option>
-              <option value="HIGH">Alta prioridad</option>
-              <option value="MED">Media prioridad</option>
-              <option value="LOW">Baja prioridad</option>
+              <option value="">Prioridad: Todas</option>
+              <option value="HIGH">Alta</option>
+              <option value="MED">Media</option>
+              <option value="LOW">Baja</option>
             </select>
           </div>
 
-          <div className="relative w-full sm:w-48">
-            <ArrowUpDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          {/* Ordenamiento */}
+          <div className="relative min-w-35 flex-1 sm:flex-initial">
+            <ArrowUpDown size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground-muted pointer-events-none" />
             <select
               value={ordenFecha}
               onChange={e => setOrdenFecha(e.target.value as OrdenFecha)}
-              className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-medium focus:outline-none focus:border-blue-400 transition-all text-gray-700 shadow-sm shadow-gray-100/40 cursor-pointer"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
             >
-              <option value="">Sin ordenar</option>
-              <option value="asc">Fecha: más próxima primero</option>
-              <option value="desc">Fecha: más lejana primero</option>
+              <option value="">Ordenar fecha</option>
+              <option value="asc">Más próxima primero</option>
+              <option value="desc">Más lejana primero</option>
             </select>
           </div>
 
+          {/* Botón limpiar */}
           {(filtroResponsable || filtroPrioridad || projectIdParam) && (
             <button
               type="button"
@@ -514,9 +515,9 @@ export const EstudianteKanban: React.FC = () => {
                 setFiltroPrioridad("");
                 navigate("/estudiante-kanban");
               }}
-              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors shrink-0 cursor-pointer"
+              className="flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-bold text-[#6b7280] bg-white border border-border rounded-xl hover:bg-gray-50 transition-colors shrink-0 cursor-pointer"
             >
-              <X size={13} /> Limpiar filtros
+              <X size={13} /> Limpiar
             </button>
           )}
         </div>
@@ -532,7 +533,7 @@ export const EstudianteKanban: React.FC = () => {
 
       {/* TABLERO KANBAN INTERACTIVO */}
       {loading ? (
-        <div className="text-center py-10 text-xs text-gray-400 font-medium">Cargando tablero...</div>
+        <div className="text-center py-10 text-xs text-foreground-muted font-medium">Cargando tablero...</div>
       ) : errorCarga ? (
         <div className="text-center py-10 text-xs text-red-500 font-semibold border border-dashed border-red-100 rounded-2xl bg-red-50/40">
           {errorCarga}
@@ -563,17 +564,17 @@ export const EstudianteKanban: React.FC = () => {
                 <div
                   key={estado}
                   data-kanban-col={estado}
-                  className={`flex flex-col rounded-2xl border ${style.border} bg-white shadow-sm shadow-gray-100/30 overflow-hidden w-full transition-shadow ${esDropTarget ? "ring-2 ring-blue-300 shadow-md" : ""}`}
+                  className={`flex flex-col rounded-2xl border ${style.border} bg-white shadow-sm shadow-gray-100/30 overflow-hidden w-full transition-shadow ${esDropTarget ? "ring-2 ring-primary/40 shadow-md" : ""}`}
                 >
                   <div className={`px-4 py-3 flex items-center justify-between border-b border-inherit ${style.header}`}>
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${style.dot}`} />
-                      <span className="text-xs font-bold text-gray-900 uppercase tracking-wider">{ESTADO_LABELS[estado]}</span>
+                      <span className="text-xs font-bold text-[#1a1d2e] uppercase tracking-wider">{ESTADO_LABELS[estado]}</span>
                     </div>
-                    <span className="text-xs font-bold bg-white border border-inherit px-2 py-0.5 rounded-full text-gray-500 shadow-sm">{filteredCards.length}</span>
+                    <span className="text-xs font-bold bg-white border border-inherit px-2 py-0.5 rounded-full text-[#6b7280] shadow-sm">{filteredCards.length}</span>
                   </div>
 
-                  <div className="p-3 flex flex-col gap-3 min-h-[300px] max-h-125 overflow-y-auto bg-gray-50/30">
+                  <div className="p-3 flex flex-col gap-3 min-h-75 max-h-125 overflow-y-auto bg-gray-50/30">
                     {filteredCards.map(card => {
                       const venc = calcularVencimiento(card.deadline, card.status);
                       const estilosVenc = vencimientoEstilos(venc.color);
@@ -586,22 +587,22 @@ export const EstudianteKanban: React.FC = () => {
                           onPointerUp={finalizarArrastre}
                           onPointerCancel={finalizarArrastre}
                           style={{ touchAction: "none" }}
-                          className={`bg-white rounded-xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition-all group space-y-3 cursor-grab active:cursor-grabbing select-none ${seEstaArrastrando ? "opacity-40" : "opacity-100"}`}
+                          className={`bg-white rounded-xl border border-border p-4 shadow-sm hover:shadow-md transition-all group space-y-3 cursor-grab active:cursor-grabbing select-none ${seEstaArrastrando ? "opacity-40" : "opacity-100"}`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1 min-w-0">
-                              <p className="text-xs font-bold text-gray-800 leading-snug">{card.name}</p>
+                              <p className="text-xs font-bold text-[#1a1d2e] leading-snug wrap-break-word">{card.name}</p>
                               {card.project?.name && (
-                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-600 text-[9px] font-bold truncate max-w-full">
+                                <span className="inline-block mt-1 px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-700 text-[9px] font-bold truncate max-w-full">
                                   {card.project.name}
                                 </span>
                               )}
                             </div>
                             <div className="flex gap-0.5 md:opacity-0 md:group-hover:opacity-100 transition-all shrink-0">
-                              <button onClick={() => openEdit(card)} className="p-1 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" title="Editar tarjeta">
+                              <button onClick={() => openEdit(card)} className="p-1 text-foreground-muted hover:text-primary rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" title="Editar tarjeta">
                                 <Edit2 size={12} />
                               </button>
-                              <button onClick={() => removeCard(card.id)} className="p-1 text-gray-400 hover:text-red-500 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" title="Eliminar tarjeta">
+                              <button onClick={() => removeCard(card.id)} className="p-1 text-foreground-muted hover:text-red-500 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer" title="Eliminar tarjeta">
                                 <X size={12} />
                               </button>
                             </div>
@@ -611,15 +612,15 @@ export const EstudianteKanban: React.FC = () => {
                             <div className="flex items-center gap-1.5 min-w-0">
                               {card.assignees.length > 0 ? (
                                 <>
-                                  <div className="w-5 h-5 rounded-full bg-blue-50 text-blue-600 text-[9px] font-bold flex items-center justify-center shrink-0 border border-blue-100">
+                                  <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-bold flex items-center justify-center shrink-0 border border-blue-200">
                                     {initials(card.assignees[0].user.name)}
                                   </div>
-                                  <span className="text-[11px] text-gray-400 font-semibold truncate">
+                                  <span className="text-[11px] text-foreground-muted font-semibold truncate">
                                     {card.assignees.map(r => r.user.name).join(", ")}
                                   </span>
                                 </>
                               ) : (
-                                <span className="text-[11px] text-gray-300 font-semibold italic">Sin asignar</span>
+                                <span className="text-[11px] text-foreground-muted font-semibold italic">Sin asignar</span>
                               )}
                             </div>
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${priorityBg(card.priority)}`}>
@@ -642,35 +643,38 @@ export const EstudianteKanban: React.FC = () => {
                     })}
 
                     {filteredCards.length === 0 && (
-                      <div className="text-center py-6 text-[11px] text-gray-400 font-medium border border-dashed border-gray-200 rounded-xl bg-white/50">
+                      <div className="text-center py-6 text-[11px] text-foreground-muted font-medium border border-dashed border-border rounded-xl bg-white/50">
                         {filtroResponsable || filtroPrioridad ? "Sin actividades para los filtros" : "Arrastra o crea una actividad aquí"}
                       </div>
                     )}
                   </div>
 
+                  {/* BOTÓN COMENTADO: Se retira del flujo para evitar crear tareas sin contexto de proyecto */}
+                  {/* 
                   <div className="p-2 border-t border-inherit bg-gray-50/50">
                     <button
                       onClick={() => openCreate(estado)}
-                      className="w-full flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-bold text-gray-500 hover:text-blue-600 hover:bg-white border border-transparent hover:border-gray-100 transition-all cursor-pointer"
+                      className="w-full flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-bold text-[#6b7280] hover:text-primary hover:bg-white border border-transparent hover:border-border transition-all cursor-pointer"
                     >
                       <Plus size={14} /> Agregar actividad
                     </button>
                   </div>
+                  */}
                 </div>
               );
             })}
           </div>
-          <p className="text-xs text-gray-400 font-medium text-center pt-2">💡 Tip: Puedes arrastrar y soltar las tarjetas entre columnas para cambiar su estado instantáneamente.</p>
+          <p className="text-xs text-foreground-muted font-medium text-center pt-2">💡 Tip: Puedes arrastrar y soltar las tarjetas entre columnas para cambiar su estado instantáneamente.</p>
         </>
       )}
 
       {/* MODAL EDITAR */}
       {editModal && editDraft && (
-        <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeEdit}>
-          <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-[#1a1d2e]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeEdit}>
+          <div className="bg-white rounded-2xl border border-border p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Editar tarjeta</h3>
-              <button onClick={closeEdit} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+              <h3 className="text-sm font-bold text-[#1a1d2e] uppercase tracking-wider">Editar tarjeta</h3>
+              <button onClick={closeEdit} className="text-foreground-muted hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
                 <X size={16} />
               </button>
             </div>
@@ -679,17 +683,17 @@ export const EstudianteKanban: React.FC = () => {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Título</label>
+                <label className="block text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1.5">Título</label>
                 <input
                   type="text"
                   value={editDraft.name}
                   onChange={e => setEditDraft(d => d && ({ ...d, name: e.target.value }))}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Responsable(s)</label>
+                <label className="block text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1.5">Responsable(s)</label>
                 {editModal.assignees.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5 mb-1.5">
                     {editModal.assignees.map(r => (
@@ -702,13 +706,13 @@ export const EstudianteKanban: React.FC = () => {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400 font-semibold mb-1.5">Sin asignar</p>
+                  <p className="text-xs text-foreground-muted font-semibold mb-1.5">Sin asignar</p>
                 )}
                 <div className="flex gap-1.5">
                   <select
                     value={miembroSeleccionado}
                     onChange={e => setMiembroSeleccionado(e.target.value)}
-                    className="flex-1 min-w-0 p-2 bg-white border border-gray-200 rounded-lg text-xs font-medium text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
+                    className="flex-1 min-w-0 p-2 bg-white border border-border rounded-lg text-xs font-medium text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border cursor-pointer"
                   >
                     <option value="">{disponibles.length > 0 ? "Agregar responsable..." : "Sin compañeros disponibles"}</option>
                     {disponibles.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -725,30 +729,30 @@ export const EstudianteKanban: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Prioridad</label>
+                <label className="block text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1.5">Prioridad</label>
                 <select
                   value={editDraft.priority}
                   onChange={e => setEditDraft(d => d && ({ ...d, priority: e.target.value as PrioridadActividad }))}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border cursor-pointer"
                 >
                   {(["HIGH", "MED", "LOW"] as PrioridadActividad[]).map(p => <option key={p} value={p}>{PRIORIDAD_LABELS[p]}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha límite</label>
+                <label className="block text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1.5">Fecha límite</label>
                 <input
                   type="date"
                   value={editDraft.deadline}
                   onChange={e => setEditDraft(d => d && ({ ...d, deadline: e.target.value }))}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border cursor-pointer"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Estado</label>
+                <label className="block text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1.5">Estado</label>
                 <select
                   value={editDraft.status}
                   onChange={e => setEditDraft(d => d && ({ ...d, status: e.target.value as EstadoActividad }))}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border cursor-pointer"
                 >
                   {ESTADOS.map(s => <option key={s} value={s}>{ESTADO_LABELS[s]}</option>)}
                 </select>
@@ -756,8 +760,8 @@ export const EstudianteKanban: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
-              <button type="button" onClick={closeEdit} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer">Cancelar</button>
-              <button type="button" onClick={saveEdit} disabled={guardando} className="px-4 py-2 text-xs font-bold text-white bg-[#0B1026] hover:bg-[#060916] rounded-xl transition-colors shadow-sm disabled:opacity-50 cursor-pointer">
+              <button type="button" onClick={closeEdit} className="px-4 py-2 text-xs font-bold text-[#6b7280] bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer">Cancelar</button>
+              <button type="button" onClick={saveEdit} disabled={guardando} className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors shadow-sm disabled:opacity-50 cursor-pointer">
                 {guardando ? "Guardando..." : "Guardar"}
               </button>
             </div>
@@ -767,14 +771,14 @@ export const EstudianteKanban: React.FC = () => {
 
       {/* MODAL CREAR */}
       {createModal && (
-        <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeCreate}>
-          <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-[#1a1d2e]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={closeCreate}>
+          <div className="bg-white rounded-2xl border border-border p-6 w-full max-w-sm shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center border-b border-gray-50 pb-2">
               <div>
-                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider">Nueva actividad</h3>
-                <p className="text-[11px] text-gray-400 font-medium mt-0.5">Se creará en: {ESTADO_LABELS[createModal]}</p>
+                <h3 className="text-sm font-bold text-[#1a1d2e] uppercase tracking-wider">Nueva actividad</h3>
+                <p className="text-[11px] text-foreground-muted font-medium mt-0.5">Se creará en: {ESTADO_LABELS[createModal]}</p>
               </div>
-              <button onClick={closeCreate} className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+              <button onClick={closeCreate} className="text-foreground-muted hover:text-gray-600 p-1 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
                 <X size={16} />
               </button>
             </div>
@@ -783,48 +787,48 @@ export const EstudianteKanban: React.FC = () => {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Título *</label>
+                <label className="block text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1.5">Título *</label>
                 <input
                   type="text"
                   value={createDraft.name}
                   onChange={e => setCreateDraft(d => ({ ...d, name: e.target.value }))}
                   placeholder="Ej. Investigar metodologías ágiles"
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Descripción</label>
+                <label className="block text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1.5">Descripción</label>
                 <textarea
                   value={createDraft.description}
                   onChange={e => setCreateDraft(d => ({ ...d, description: e.target.value }))}
                   rows={2}
                   placeholder="Describe el objetivo y alcance de la actividad."
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 resize-none focus:outline-none focus:border-blue-400 transition-all box-border"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] resize-none focus:outline-none focus:border-primary transition-all box-border"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Fecha límite</label>
+                <label className="block text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1.5">Fecha límite</label>
                 <input
                   type="date"
                   min={new Date().toISOString().split("T")[0]}
                   value={createDraft.deadline}
                   onChange={e => setCreateDraft(d => ({ ...d, deadline: e.target.value }))}
-                  className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 focus:outline-none focus:border-blue-400 transition-all box-border cursor-pointer"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border cursor-pointer"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Prioridad</label>
+                <label className="block text-[10px] font-bold text-foreground-muted uppercase tracking-wider mb-1.5">Prioridad</label>
                 <div className="flex items-center gap-4">
                   {(["HIGH", "MED", "LOW"] as PrioridadActividad[]).map(p => (
-                    <label key={p} className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-gray-700">
+                    <label key={p} className="flex items-center gap-1.5 cursor-pointer text-xs font-medium text-[#6b7280]">
                       <input
                         type="radio"
                         name="prioridad-nueva"
                         value={p}
                         checked={createDraft.priority === p}
                         onChange={() => setCreateDraft(d => ({ ...d, priority: p }))}
-                        className="accent-black w-3.5 h-3.5"
+                        className="accent-indigo-600 w-3.5 h-3.5"
                       />
                       <span>{PRIORIDAD_LABELS[p]}</span>
                     </label>
@@ -834,8 +838,8 @@ export const EstudianteKanban: React.FC = () => {
             </div>
 
             <div className="flex justify-end gap-2.5 pt-3 border-t border-gray-50">
-              <button type="button" onClick={closeCreate} className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer">Cancelar</button>
-              <button type="button" onClick={saveCreate} disabled={creando} className="px-4 py-2 text-xs font-bold text-white bg-[#0B1026] hover:bg-[#060916] rounded-xl transition-colors shadow-sm disabled:opacity-50 cursor-pointer">
+              <button type="button" onClick={closeCreate} className="px-4 py-2 text-xs font-bold text-[#6b7280] bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer">Cancelar</button>
+              <button type="button" onClick={saveCreate} disabled={creando} className="px-4 py-2 text-xs font-bold text-white bg-primary hover:bg-primary/90 rounded-xl transition-colors shadow-sm disabled:opacity-50 cursor-pointer">
                 {creando ? "Creando..." : "Crear actividad"}
               </button>
             </div>
@@ -843,17 +847,17 @@ export const EstudianteKanban: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL CONFIRMAR ELIMINAR (reemplaza confirm() bloqueante) */}
+      {/* MODAL CONFIRMAR ELIMINAR */}
       {pendingDeleteId && (
-        <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !eliminando && setPendingDeleteId(null)}>
-          <div className="bg-white rounded-2xl border border-gray-100 p-6 w-full max-w-xs shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-[#1a1d2e]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={() => !eliminando && setPendingDeleteId(null)}>
+          <div className="bg-white rounded-2xl border border-border p-6 w-full max-w-xs shadow-xl space-y-4 relative box-border" onClick={e => e.stopPropagation()}>
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center shrink-0">
                 <AlertCircle size={16} />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-gray-900">Eliminar actividad</h3>
-                <p className="text-xs text-gray-500 font-medium mt-1">Esta acción no se puede deshacer. ¿Deseas continuar?</p>
+                <h3 className="text-sm font-bold text-[#1a1d2e]">Eliminar actividad</h3>
+                <p className="text-xs text-[#6b7280] font-medium mt-1">Esta acción no se puede deshacer. ¿Deseas continuar?</p>
               </div>
             </div>
             <div className="flex justify-end gap-2.5 pt-2 border-t border-gray-50">
@@ -861,7 +865,7 @@ export const EstudianteKanban: React.FC = () => {
                 type="button"
                 onClick={() => setPendingDeleteId(null)}
                 disabled={eliminando}
-                className="px-4 py-2 text-xs font-bold text-gray-500 bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+                className="px-4 py-2 text-xs font-bold text-[#6b7280] bg-gray-50 hover:bg-gray-100 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -878,11 +882,11 @@ export const EstudianteKanban: React.FC = () => {
         </div>
       )}
 
-      {/* BANNER DE ERROR DE DRAG/DELETE (reemplaza alert() bloqueante) */}
+      {/* BANNER DE ERROR DE DRAG/DELETE */}
       {dragErrorMsg && (
-        <div className="fixed bottom-4 right-4 max-w-xs bg-white border border-red-200 text-red-600 text-xs font-semibold px-4 py-3 rounded-xl shadow-lg z-[60] flex items-start gap-2">
+        <div className="fixed bottom-4 right-4 max-w-xs bg-white border border-red-200 text-red-600 text-xs font-semibold px-4 py-3 rounded-xl shadow-lg z-60 flex items-start gap-2">
           <AlertCircle size={14} className="shrink-0 mt-0.5" />
-          <span className="flex-1">{dragErrorMsg}</span>
+          <span className="flex-1 min-w-0 wrap-break-word">{dragErrorMsg}</span>
           <button onClick={() => setDragErrorMsg(null)} className="text-red-300 hover:text-red-500 shrink-0 cursor-pointer">
             <X size={12} />
           </button>
@@ -891,3 +895,5 @@ export const EstudianteKanban: React.FC = () => {
     </div>
   );
 };
+
+export default EstudianteKanban;

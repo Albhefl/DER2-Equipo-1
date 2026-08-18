@@ -42,6 +42,13 @@ const INCLUDE_RELATIONS = {
   evidence: true,
 };
 
+// ⚠️ Estas dos funciones son SOLO para Activity.status (enum PENDING/IN_PROCESS/
+// IN_REVIEW/DONE). NO deben usarse para Project.status — ese campo ahora es
+// String libre ('Activo' | 'En proceso' | 'En revisión' | 'Completado' | 'Pausado')
+// y pasar sus valores por este mapeo los reescribía silenciosamente a 'PENDING'
+// (por no matchear el case-sensitive 'En proceso' vs 'En Proceso'), guardando
+// literalmente el texto "PENDING" en la base y mostrando siempre "Activo" al
+// devolverlo. Ver normalizarEstadoProyecto() más abajo para el reemplazo correcto.
 function mapStatusToClient(status: string): string {
   switch (status) {
     case 'IN_PROCESS': return 'En Proceso';
@@ -64,6 +71,24 @@ function mapStatusToPrisma(status: string): 'PENDING' | 'IN_PROCESS' | 'IN_REVIE
     case 'PENDING':
     default: return 'PENDING';
   }
+}
+
+// ✅ NUEVO: el modelo Project nunca tenía manejo de prioridad, a diferencia
+// de Activity. El frontend manda 'Alta' | 'Media' | 'Baja' directamente
+// (sin mapear a un enum), así que solo normalizamos y validamos el valor.
+const PRIORIDADES_VALIDAS = ['Alta', 'Media', 'Baja'] as const;
+function normalizarPrioridadProyecto(valor: unknown): 'Alta' | 'Media' | 'Baja' {
+  const v = typeof valor === 'string' ? valor.trim() : '';
+  return (PRIORIDADES_VALIDAS as readonly string[]).includes(v) ? (v as any) : 'Alta';
+}
+
+// 🔧 FIX: Project.status es String, no el enum Status de Activity. Se normaliza
+// igual que la prioridad — se guarda y se devuelve tal cual, sin pasar por
+// mapStatusToPrisma/mapStatusToClient.
+const ESTADOS_PROYECTO_VALIDOS = ['Activo', 'En proceso', 'En revisión', 'Completado', 'Pausado'] as const;
+function normalizarEstadoProyecto(valor: unknown): string {
+  const v = typeof valor === 'string' ? valor.trim() : '';
+  return (ESTADOS_PROYECTO_VALIDOS as readonly string[]).includes(v) ? v : 'Activo';
 }
 
 /**
@@ -101,7 +126,13 @@ router.get('/proyectos', verificarToken, async (req: AuthRequest, res: Response)
         description: p.description,
         startDate: p.startDate,
         endDate: p.endDate,
-        status: mapStatusToClient(p.status),
+        // 🔧 FIX: antes era mapStatusToClient(p.status), que traducía el string
+        // libre como si fuera el enum de Activity y siempre regresaba 'Activo'.
+        status: p.status,
+        // ✅ NUEVO: antes esta respuesta nunca incluía la prioridad, por lo
+        // que el frontend jamás podía mostrarla en "Detalle rápido" aunque
+        // el guardado hubiera funcionado.
+        priority: p.priority || 'Alta',
         progress: progress,
         members: p.members.map((m: any) => m.user),
         evaluators: p.evaluators.map((e: any) => e.user)
@@ -120,7 +151,7 @@ router.get('/proyectos', verificarToken, async (req: AuthRequest, res: Response)
  */
 router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
   const usuario_id = req.user?.userId;
-  const { id, name, description, startDate, endDate, status, evaluators, members } = req.body;
+  const { id, name, description, startDate, endDate, status, priority, evaluators, members } = req.body;
 
   if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
 
@@ -131,7 +162,12 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
   try {
     const parsedStartDate = startDate ? new Date(startDate) : null;
     const parsedEndDate = endDate ? new Date(endDate) : null;
-    const prismaStatus = mapStatusToPrisma(status);
+    // 🔧 FIX: antes era mapStatusToPrisma(status), que no reconocía 'En proceso'
+    // (con minúscula) y caía siempre en el default 'PENDING', guardando ese
+    // texto literal en la columna. Ahora se normaliza como string libre.
+    const estadoProyecto = normalizarEstadoProyecto(status);
+    // ✅ NUEVO: normalizamos la prioridad recibida del formulario.
+    const prioridadProyecto = normalizarPrioridadProyecto(priority);
 
     const membersList: Array<{ id: string }> = Array.isArray(members) ? members : [];
     const evaluatorsList: Array<{ id: string }> = Array.isArray(evaluators) ? evaluators : [];
@@ -153,7 +189,9 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
           description: description?.trim() || null,
           startDate: parsedStartDate,
           endDate: parsedEndDate,
-          status: prismaStatus,
+          status: estadoProyecto,
+          // ✅ NUEVO: antes este campo nunca se escribía en la actualización.
+          priority: prioridadProyecto,
           members: {
             create: membersList.map(m => ({ userId: m.id }))
           },
@@ -174,7 +212,9 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
           description: description?.trim() || null,
           startDate: parsedStartDate,
           endDate: parsedEndDate,
-          status: prismaStatus,
+          status: estadoProyecto,
+          // ✅ NUEVO: antes este campo nunca se escribía en la creación.
+          priority: prioridadProyecto,
           members: {
             create: membersList.map(m => ({ userId: m.id }))
           },
@@ -202,7 +242,12 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
         description: proyectoResult.description,
         startDate: proyectoResult.startDate,
         endDate: proyectoResult.endDate,
-        status: mapStatusToClient(proyectoResult.status),
+        // 🔧 FIX: antes era mapStatusToClient(proyectoResult.status), que
+        // volvía a traducir el string libre y regresaba siempre 'Activo'.
+        status: proyectoResult.status,
+        // ✅ NUEVO: antes la respuesta tampoco incluía la prioridad, así que
+        // aunque se hubiera guardado, el frontend nunca la recibía de vuelta.
+        priority: proyectoResult.priority || 'Alta',
         progress,
         members: proyectoResult.members.map((m: any) => m.user),
         evaluators: proyectoResult.evaluators.map((e: any) => e.user)
@@ -236,7 +281,7 @@ router.delete('/proyectos/:id', verificarToken, async (req: AuthRequest, res: Re
     // Limpiamos relaciones previas
     await db.projectMember.deleteMany({ where: { projectId: id as string } });
     await db.projectEvaluator.deleteMany({ where: { projectId: id as string } });
-    
+
     // Desvinculamos actividades asociadas para evitar conflictos de llave foránea
     await db.activity.updateMany({
       where: { projectId: id as string },
