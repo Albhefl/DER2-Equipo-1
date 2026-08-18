@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom'; 
-import { Folder, Bell, CheckSquare, Clock } from 'lucide-react';
+import { Folder, CheckSquare, Clock } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
 
 const API_PROYECTOS_URL = `${API_BASE_URL}/actividades/proyectos`;
@@ -122,11 +122,8 @@ export const EvaluadorDashboard: React.FC = () => {
           <p className="text-xs text-gray-400">Bienvenido, {nombreEvaluador}</p>
         </div>
         <div className="flex items-center gap-4">
-          <button className="text-gray-400 p-2 hover:bg-gray-50 rounded-xl transition-colors relative">
-            <Bell size={20} />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-blue-600 rounded-full"></span>
-          </button>
-          <div className="flex items-center gap-3 pl-3 border-l border-gray-100">
+          {/* 🟢 Campana decorativa removida para solucionar el Bug 03 */}
+          <div className="flex items-center gap-3 pl-3">
             <div className="w-9 h-9 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">
               {iniciales}
             </div>

@@ -53,7 +53,8 @@ model Project {
   description String?
   startDate   DateTime? @map("start_date")
   endDate     DateTime? @map("end_date")
-  status      Status    @default(PENDING)
+  status      String    @default("Activo")
+  priority    String    @default("Alta")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 

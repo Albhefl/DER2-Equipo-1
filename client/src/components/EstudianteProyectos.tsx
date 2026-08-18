@@ -5,6 +5,7 @@ import {
   CheckCircle2, AlertCircle, Eye, CheckSquare, Trash2, X 
 } from 'lucide-react';
 import { API_BASE_URL } from '../config/api';
+import { obtenerHoyISO, obtenerMananaISO, validarFechaFinProyecto } from '../utils/dateUtils';
 
 function Badge({ label }: { label: string }) {
   let cls = 'bg-gray-50 text-gray-600';
@@ -15,6 +16,20 @@ function Badge({ label }: { label: string }) {
 
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${cls}`}>
+      {label}
+    </span>
+  );
+}
+
+function PriorityBadge({ priority }: { priority?: string }) {
+  const p = (priority || 'Alta').toLowerCase();
+  let cls = 'bg-rose-50 text-rose-600';
+  let label = 'Alta';
+  if (p === 'media') { cls = 'bg-amber-50 text-amber-600'; label = 'Media'; }
+  else if (p === 'baja') { cls = 'bg-emerald-50 text-emerald-600'; label = 'Baja'; }
+
+  return (
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-semibold ${cls}`}>
       {label}
     </span>
   );
@@ -36,13 +51,27 @@ function StatCard({ label, value, color, icon }: { label: string; value: number;
 
 function formatearFechaParaInput(fechaRaw?: string) {
   if (!fechaRaw) return '';
-  return new Date(fechaRaw).toISOString().split('T')[0];
+  // ✅ FIX: toISOString() ya devuelve la fecha en UTC, así que en teoría
+  // era consistente — pero lo dejamos explícito con getUTC* para que
+  // quede claro y sea consistente con formatearFechaVista de abajo.
+  const d = new Date(fechaRaw);
+  const anio = d.getUTCFullYear();
+  const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dia = String(d.getUTCDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
 }
 
 function formatearFechaVista(fechaRaw?: string) {
   if (!fechaRaw) return '30/06/2026';
   const d = new Date(fechaRaw);
-  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+  // ✅ FIX: las fechas se guardan como medianoche UTC ("2026-08-16T00:00:00.000Z").
+  // Antes se leían con getDate()/getMonth()/getFullYear(), que devuelven la
+  // fecha en la ZONA HORARIA LOCAL del navegador. En México (UTC-6),
+  // medianoche UTC del día 16 equivale a las 6pm del día 15 en local,
+  // así que todas las fechas se mostraban un día antes de lo real.
+  // Usamos los getters UTC para que la fecha mostrada coincida siempre
+  // con la fecha que el usuario realmente eligió/guardó.
+  return `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth() + 1).toString().padStart(2, '0')}/${d.getUTCFullYear()}`;
 }
 
 interface UsuarioSimple {
@@ -91,6 +120,7 @@ export const EstudianteProyectos: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState('Todos');
 
   const [backendError, setBackendError] = useState<string | null>(null);
+  const [errorFechaCierre, setErrorFechaCierre] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const [integranteEmail, setIntegranteEmail] = useState('');
@@ -116,7 +146,15 @@ export const EstudianteProyectos: React.FC = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        setProyectos(data.proyectos || []);
+        const lista: Proyecto[] = data.proyectos || [];
+        setProyectos(lista);
+
+        // Re-sincroniza el proyecto seleccionado (Detalle rápido) con los
+        // datos frescos, buscando por id, igual que se hizo en EstudianteVistas.
+        setSelectedProyecto(prev => {
+          if (!prev) return prev;
+          return lista.find(p => p.id === prev.id) ?? prev;
+        });
       }
     } catch (err) {
       console.error('Error al obtener proyectos:', err);
@@ -171,6 +209,7 @@ export const EstudianteProyectos: React.FC = () => {
 
   const abrirEditar = (p: Proyecto) => {
     setBackendError(null);
+    setErrorFechaCierre(null);
     setSuccessMessage(null);
     setIntegranteEmail('');
     setEvaluadorEmail('');
@@ -260,17 +299,22 @@ export const EstudianteProyectos: React.FC = () => {
 
     const payload = { ...formProyecto, name: nombreTrim };
     if (!payload.startDate) {
-      const hoy = new Date();
-      payload.startDate = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+      payload.startDate = obtenerHoyISO();
     }
 
-    if (payload.startDate && payload.endDate && payload.endDate < payload.startDate) {
-      setBackendError('La fecha de cierre no puede ser anterior a la fecha de inicio.');
+    const resultadoFecha = validarFechaFinProyecto(payload.startDate, payload.endDate);
+    if (!resultadoFecha.valida) {
+      setBackendError(resultadoFecha.mensaje || 'Fecha inválida.');
       return;
     }
 
     try {
       const token = localStorage.getItem('token');
+
+      // Nota: el backend maneja creación Y actualización en la misma ruta
+      // POST /actividades/proyectos — si el payload trae "id", hace un
+      // update; si no, hace un create. No existe (ni hace falta) una ruta
+      // PUT separada, así que siempre usamos POST aquí.
       const res = await fetch(`${API_BASE_URL}/actividades/proyectos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -278,14 +322,24 @@ export const EstudianteProyectos: React.FC = () => {
       });
 
       if (res.ok) {
+        const data = await res.json().catch(() => null);
+        const proyectoActualizado = data?.proyecto || data;
+
         setSuccessMessage('¡Proyecto guardado exitosamente!');
+
+        // Si estábamos viendo este proyecto en "Detalle rápido", refréscalo
+        // de inmediato en vez de esperar solo al refetch de la lista.
+        if (proyectoActualizado && selectedProyecto?.id === formProyecto.id) {
+          setSelectedProyecto(prev => (prev ? { ...prev, ...proyectoActualizado } : prev));
+        }
+
         setTimeout(() => {
           setModo('lista');
           obtenerProyectos();
           setSuccessMessage(null);
         }, 1500);
       } else {
-        const errData = await res.json();
+        const errData = await res.json().catch(() => ({}));
         setBackendError(errData.message || 'Error al guardar el proyecto.');
       }
     } catch (err) {
@@ -369,10 +423,21 @@ export const EstudianteProyectos: React.FC = () => {
                   <input 
                     type="date" 
                     disabled={!!successMessage}
+                    min={obtenerMananaISO()}
                     value={formProyecto.endDate || ''}
-                    onChange={e => setFormProyecto({ ...formProyecto, endDate: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50/70 border border-gray-200 rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:bg-white focus:border-gray-300 transition"
+                    onChange={e => {
+                      const valor = e.target.value;
+                      setFormProyecto({ ...formProyecto, endDate: valor });
+                      const resultado = validarFechaFinProyecto(formProyecto.startDate || obtenerHoyISO(), valor);
+                      setErrorFechaCierre(resultado.mensaje);
+                    }}
+                    className={`w-full p-2.5 border rounded-xl text-xs font-medium text-gray-800 focus:outline-none focus:bg-white transition ${
+                      errorFechaCierre ? 'bg-red-50 border-red-300' : 'bg-gray-50/70 border-gray-200 focus:border-gray-300'
+                    }`}
                   />
+                  {errorFechaCierre && (
+                    <p className="text-[11px] text-red-600 font-semibold mt-1 leading-snug">{errorFechaCierre}</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-gray-700 mb-1">Prioridad</label>
@@ -512,7 +577,7 @@ export const EstudianteProyectos: React.FC = () => {
             </button>
             <button 
               type="submit" 
-              disabled={!!successMessage}
+              disabled={!!successMessage || !!errorFechaCierre}
               className="w-full sm:w-auto px-5 py-2.5 text-xs font-bold text-white bg-black hover:bg-gray-900 rounded-xl shadow-xs transition cursor-pointer disabled:opacity-50"
             >
               {successMessage ? 'Guardando...' : 'Guardar cambios'}
@@ -532,6 +597,7 @@ export const EstudianteProyectos: React.FC = () => {
         <button 
           onClick={() => {
             setBackendError(null);
+            setErrorFechaCierre(null);
             setSuccessMessage(null);
             setIntegranteEmail('');
             setEvaluadorEmail('');
@@ -693,6 +759,12 @@ export const EstudianteProyectos: React.FC = () => {
                   <Badge label={selectedProyecto.status || 'Activo'} />
                 </div>
 
+                {/* ✅ Campo agregado: antes la prioridad no se mostraba en ningún lado del panel */}
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 font-medium">Prioridad</span>
+                  <PriorityBadge priority={selectedProyecto.priority} />
+                </div>
+
                 <div className="flex justify-between items-center">
                   <span className="text-gray-400 font-medium">Creado el</span>
                   <span className="font-bold text-gray-800">
@@ -736,7 +808,12 @@ export const EstudianteProyectos: React.FC = () => {
                     actividadesProyecto.map(act => (
                       <div 
                         key={act.id} 
-                        onClick={() => navigate(`/estudiante-actividades?id=${act.id}`)}
+                        // 🛠️ FIX: antes solo se mandaba ?id=..., y se perdía el projectId
+                        // al navegar. Eso hacía que ActividadesPage no supiera en qué
+                        // proyecto estabas, y el campo "Proyecto Asignado" del modal de
+                        // editar volvía a mostrarse como <select> editable en vez de
+                        // quedar bloqueado al proyecto actual.
+                        onClick={() => navigate(`/estudiante-actividades?id=${act.id}&projectId=${selectedProyecto.id}`)}
                         className="p-3.5 bg-white border border-gray-100 hover:border-gray-300 rounded-2xl text-xs shadow-xs flex justify-between items-center transition cursor-pointer group gap-2"
                       >
                         <span className="font-bold text-gray-800 group-hover:text-black truncate pr-1">{act.name}</span>

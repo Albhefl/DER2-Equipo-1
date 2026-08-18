@@ -69,7 +69,7 @@ function App() {
           <Route path="/estudiante-dashboard" element={<EstudianteDashboard />} />
           <Route path="/estudiante-proyectos" element={<EstudianteProyectos />} />
           <Route path="/estudiante-actividades" element={<ActividadesPage />} />
-          <Route path="/estudiante-entregas" element={<EntregasPage />} />
+          /*{/*<Route path="/estudiante-entregas" element={<EntregasPage />} />*}
           
           {/* 🟢 RUTAS FUNCIONALES NUEVAS */}
           <Route path="/estudiante-calendario" element={<CalendarioFuncional />} />
