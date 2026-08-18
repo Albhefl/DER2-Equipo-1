@@ -247,7 +247,7 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
       if (e.user?.email) {
         enviarCorreoInvitacion(e.user.email, proyectoResult.name, 'evaluador');
       }
-    })
+    });
 
     return res.status(id ? 200 : 201).json({
       message: id ? 'Proyecto actualizado exitosamente.' : 'Proyecto creado exitosamente.',
