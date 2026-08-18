@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Search, Plus, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter, FolderOpen, AlertCircle } from 'lucide-react';
+import { Search, Edit2, X, Clock, UserPlus, ArrowUpDown, Filter, FolderOpen, AlertCircle } from 'lucide-react';
 import { ProgressBar } from './ProgressBar';
 import { API_BASE_URL } from '../config/api';
 
@@ -341,7 +341,7 @@ export const EstudianteKanban: React.FC = () => {
   const [creando, setCreando] = useState(false);
   const [errorCrear, setErrorCrear] = useState<string | null>(null);
 
-  const openCreate = (estado: EstadoActividad) => {
+  const _openCreate = (estado: EstadoActividad) => {
     setCreateModal(estado);
     setCreateDraft({ name: "", description: "", deadline: new Date().toISOString().split("T")[0], priority: "MED" });
     setErrorCrear(null);

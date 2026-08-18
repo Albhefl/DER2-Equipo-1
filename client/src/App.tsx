@@ -20,10 +20,7 @@ import { EvaluadorKanban } from './components/EvaluadorKanban';
 import { LayoutEstudiante } from './components/LayoutEstudiante';
 import { EstudianteDashboard } from './components/EstudianteDashboard'; 
 import { EstudianteKanban } from './components/EstudianteKanban'; 
-import { 
-  ActividadesPage 
-} from './components/EstudianteVistas';
-import { EntregasPage } from './components/EntregasPage';
+import { ActividadesPage } from './components/EstudianteVistas';
 // 🟢 Nuevos componentes modulares del estudiante
 import { EstudianteProyectos } from './components/EstudianteProyectos';
 import { CalendarioFuncional } from './components/CalendarioFuncional';
@@ -73,7 +70,7 @@ function App() {
           <Route path="/estudiante-dashboard" element={<EstudianteDashboard />} />
           <Route path="/estudiante-proyectos" element={<EstudianteProyectos />} />
           <Route path="/estudiante-actividades" element={<ActividadesPage />} />
-          /*{/*<Route path="/estudiante-entregas" element={<EntregasPage />} />*}
+          {/* <Route path="/estudiante-entregas" element={<EntregasPage />} /> */}
           
           {/* 🟢 RUTAS FUNCIONALES NUEVAS */}
           <Route path="/estudiante-calendario" element={<CalendarioFuncional />} />

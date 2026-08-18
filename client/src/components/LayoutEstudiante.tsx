@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, FolderOpen, ListChecks, Package, 
+  LayoutDashboard, FolderOpen, ListChecks,
   CalendarDays, LayoutGrid, User, LogOut, Menu, X 
 } from 'lucide-react';
 
