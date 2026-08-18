@@ -20,8 +20,10 @@ import { EvaluadorKanban } from './components/EvaluadorKanban';
 import { LayoutEstudiante } from './components/LayoutEstudiante';
 import { EstudianteDashboard } from './components/EstudianteDashboard'; 
 import { EstudianteKanban } from './components/EstudianteKanban'; 
-import { ActividadesPage } from './components/EstudianteVistas';
-import { EstudianteEntregas as EntregasPage } from './EstudianteEntregas';
+import { 
+  ActividadesPage 
+} from './components/EstudianteVistas';
+import { EntregasPage } from './components/EntregasPage';
 // 🟢 Nuevos componentes modulares del estudiante
 import { EstudianteProyectos } from './components/EstudianteProyectos';
 import { CalendarioFuncional } from './components/CalendarioFuncional';
