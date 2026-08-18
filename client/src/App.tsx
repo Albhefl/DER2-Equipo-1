@@ -27,6 +27,7 @@ import { EstudianteProyectos } from './components/EstudianteProyectos';
 import { CalendarioFuncional } from './components/CalendarioFuncional';
 import { EstudiantePerfil } from './components/EstudiantePerfil';
 import { RecuperarPassword } from './components/RecuperarPassword';
+import { RestablecerPassword } from './components/RestablecerPassword';
 
 function App() {
   return (
@@ -36,8 +37,9 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} /> 
         
-        {/* 🟢 NUEVA RUTA PARA RECUPERAR CONTRASEÑA */}
+        {/* 🟢 NUEVAS RUTAS PARA RECUPERAR CONTRASEÑA */}
         <Route path="/recuperar-password" element={<RecuperarPassword />} />
+        <Route path="/restablecer-password" element={<RestablecerPassword />} />
         
         {/* 🔒 RUTA ENVOLVEDORA PROTEGIDA DEL EVALUADOR (SÓLO PARA EVALUADORES) */}
         <Route 

@@ -3,6 +3,7 @@ import jwt, { type SignOptions } from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import rateLimit from 'express-rate-limit';
 import db from '../src/db.js'; // Cliente de Prisma (Postgres)
+import { enviarCorreoRecuperacion } from '../src/mailer.js';
 
 const router = Router();
 
@@ -123,6 +124,98 @@ router.post('/login', loginLimiter, async (req: Request, res: Response): Promise
   } catch (error) {
     console.error('Error en el servidor:', error);
     return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
+/**
+ * =========================================================================
+ * 3. ENDPOINT: POST /api/auth/recover-password
+ * Solicitud de recuperación de contraseña y envío de correo con token
+ * =========================================================================
+ */
+router.post('/recover-password', async (req: Request, res: Response): Promise<any> => {
+  const { email } = req.body;
+
+  try {
+    if (!email || typeof email !== 'string' || email.trim() === '') {
+      return res.status(400).json({ message: 'El correo electrónico es obligatorio.' });
+    }
+
+    const cleanEmail = email.trim();
+    const user = await db.user.findUnique({
+      where: { email: cleanEmail },
+    });
+
+    if (user) {
+      // Token temporal para restablecer clave (válido por 15 min)
+      const token = jwt.sign(
+        { userId: user.id, email: user.email, type: 'password_reset' },
+        JWT_SECRET,
+        { expiresIn: '15m' }
+      );
+
+      // Enviar correo electrónico
+      await enviarCorreoRecuperacion(cleanEmail, token);
+    }
+
+    // Por seguridad, siempre devolvemos la misma respuesta de éxito
+    return res.status(200).json({
+      message: 'Si el correo está registrado, te hemos enviado un enlace para restablecer tu contraseña.'
+    });
+
+  } catch (error) {
+    console.error('Error al procesar recuperación de contraseña:', error);
+    return res.status(500).json({ message: 'Error al procesar la solicitud de recuperación.' });
+  }
+});
+
+/**
+ * =========================================================================
+ * 4. ENDPOINT: POST /api/auth/reset-password
+ * Restablece la contraseña utilizando el token enviado por correo
+ * =========================================================================
+ */
+router.post('/reset-password', async (req: Request, res: Response): Promise<any> => {
+  const { token, newPassword } = req.body;
+
+  try {
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: 'El token y la nueva contraseña son obligatorios.' });
+    }
+
+    if (typeof newPassword !== 'string' || newPassword.length < 6) {
+      return res.status(400).json({ message: 'La nueva contraseña debe tener al menos 6 caracteres.' });
+    }
+
+    // Verificar token JWT
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch (err) {
+      return res.status(400).json({ message: 'El enlace de recuperación es inválido o ha expirado.' });
+    }
+
+    if (decoded.type !== 'password_reset' || !decoded.userId) {
+      return res.status(400).json({ message: 'Token de recuperación inválido.' });
+    }
+
+    // Encriptar nueva contraseña
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    // Actualizar en la base de datos
+    await db.user.update({
+      where: { id: decoded.userId },
+      data: { passwordHash },
+    });
+
+    return res.status(200).json({
+      message: '¡Tu contraseña ha sido restablecida exitosamente! Ya puedes iniciar sesión.'
+    });
+
+  } catch (error) {
+    console.error('Error al restablecer contraseña:', error);
+    return res.status(500).json({ message: 'Error interno al actualizar la contraseña.' });
   }
 });
 
