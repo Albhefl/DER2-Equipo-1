@@ -5,6 +5,8 @@ import multer, { type FileFilterCallback } from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { enviarCorreoInvitacion } from '../src/mailer.js';
+
 
 const router = Router();
 
@@ -233,6 +235,19 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
     const totalActivities = proyectoResult.activities?.length || 0;
     const doneActivities = proyectoResult.activities?.filter((a: any) => a.status === 'DONE').length || 0;
     const progress = totalActivities > 0 ? Math.round((doneActivities / totalActivities) * 100) : 0;
+
+    // 📧 NUEVO: Disparar correos de invitación a los miembros y evaluadores
+    proyectoResult.members.forEach((m: any) => {
+      if (m.user?.email && m.user.id !== usuario_id) {
+        enviarCorreoInvitacion(m.user.email, proyectoResult.name, 'estudiante');
+      }
+    });
+
+    proyectoResult.evaluators.forEach((e: any) => {
+      if (e.user?.email) {
+        enviarCorreoInvitacion(e.user.email, proyectoResult.name, 'evaluador');
+      }
+    })
 
     return res.status(id ? 200 : 201).json({
       message: id ? 'Proyecto actualizado exitosamente.' : 'Proyecto creado exitosamente.',
