@@ -14,7 +14,7 @@ export const LayoutEstudiante: React.FC = () => {
     { label: "Dashboard", path: "/estudiante-dashboard", icon: <LayoutDashboard size={18} /> },
     { label: "Proyectos", path: "/estudiante-proyectos", icon: <FolderOpen size={18} /> },
     { label: "Actividades", path: "/estudiante-actividades", icon: <ListChecks size={18} /> },
-    { label: "Entregas", path: "/estudiante-entregas", icon: <Package size={18} /> },
+    /*{ label: "Entregas", path: "/estudiante-entregas", icon: <Package size={18} /> },*/
     { label: "Calendario", path: "/estudiante-calendario", icon: <CalendarDays size={18} /> },
     { label: "Tablero Kanban", path: "/estudiante-kanban", icon: <LayoutGrid size={18} /> },
     { label: "Perfil", path: "/estudiante-perfil", icon: <User size={18} /> },
@@ -32,7 +32,7 @@ export const LayoutEstudiante: React.FC = () => {
     <div className="min-h-screen bg-slate-50 md:flex md:flex-row font-sans antialiased text-[#111827] w-full overflow-x-hidden">
       
       {/* 📱 HEADER SUPERIOR MÓVIL */}
-      <header className="md:hidden bg-[#1a1d2e] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-50 h-[53px] w-full">
+      <header className="md:hidden bg-[#1a1d2e] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-50 h-13.25 w-full">
         <div className="flex items-center gap-2">
           <span className="font-bold text-sm tracking-tight">ClassBoard</span>
         </div>
@@ -82,7 +82,7 @@ export const LayoutEstudiante: React.FC = () => {
 
       {/* 🎒 MENÚ FLOTANTE MÓVIL */}
       {menuAbierto && (
-        <div className="md:hidden fixed inset-x-0 bottom-0 top-[53px] bg-[#1a1d2e] z-40 w-full overflow-y-auto">
+        <div className="md:hidden fixed inset-x-0 bottom-0 top-13.25 bg-[#1a1d2e] z-40 w-full overflow-y-auto">
           <nav className="p-4 flex flex-col gap-1">
             {navItems.map(item => (
               <button
@@ -103,7 +103,7 @@ export const LayoutEstudiante: React.FC = () => {
       )}
 
       {/* 📈 CONTENIDO PRINCIPAL */}
-      <main className="flex-grow p-4 md:p-6 w-full max-w-full box-border overflow-x-hidden">
+      <main className="grow p-4 md:p-6 w-full max-w-full box-border overflow-x-hidden">
         <Outlet />
       </main>
 

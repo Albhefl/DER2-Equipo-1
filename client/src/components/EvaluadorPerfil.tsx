@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Upload } from 'lucide-react';
 import { API_BASE_URL, SERVER_URL } from '../config/api';
 
 const API_PROYECTOS_URL = `${API_BASE_URL}/actividades/proyectos`;
@@ -24,8 +23,25 @@ const getInitials = (name?: string) => {
   }
 };
 
+// Función robusta para formatear y filtrar la URL de la foto de perfil
+const getProfilePictureUrl = (profilePicture?: string) => {
+  if (!profilePicture || profilePicture.trim() === '' || profilePicture.length <= 3) return '';
+  
+  if (
+    profilePicture.startsWith('http://') || 
+    profilePicture.startsWith('https://') || 
+    profilePicture.startsWith('blob:') || 
+    profilePicture.startsWith('data:')
+  ) {
+    return profilePicture;
+  }
+  if (profilePicture.startsWith('/')) {
+    return `${SERVER_URL}${profilePicture}`;
+  }
+  return `${SERVER_URL}/uploads/${profilePicture}`;
+};
+
 export const EvaluadorPerfil: React.FC = () => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [perfil, setPerfil] = useState<UsuarioPerfil>({
     name: 'Profesor01',
     email: 'profesor01@classboard.com',
@@ -47,7 +63,7 @@ export const EvaluadorPerfil: React.FC = () => {
             name: parsed.name || 'Profesor01',
             email: parsed.email || 'profesor01@classboard.com',
             role: parsed.role || 'EVALUATOR',
-            profilePicture: parsed.profilePicture || ''
+            profilePicture: parsed.profilePicture || parsed.avatar || ''
           });
         }
 
@@ -79,49 +95,14 @@ export const EvaluadorPerfil: React.FC = () => {
     cargarPerfilYDatos();
   }, []);
 
-  const handleSubirFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append('profileImage', file);
-
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_BASE_URL}/usuarios/perfil/foto`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const updatedUser = data.usuario;
-
-        const storedUser = localStorage.getItem('user');
-        const currentObj = storedUser ? JSON.parse(storedUser) : {};
-        const newObj = { ...currentObj, profilePicture: updatedUser.profilePicture };
-        localStorage.setItem('user', JSON.stringify(newObj));
-
-        setPerfil(prev => ({ ...prev, profilePicture: updatedUser.profilePicture }));
-      } else {
-        alert('No se pudo actualizar la foto de perfil.');
-      }
-    } catch (err) {
-      console.error('Error al subir la foto:', err);
-    } finally {
-      if (e.target) e.target.value = '';
-    }
-  };
-
   const nombreUsuario = perfil.name;
   const correoUsuario = perfil.email;
   const iniciales = getInitials(nombreUsuario);
   const rolUsuario = perfil.role === 'EVALUATOR' ? 'Evaluador' : 'Usuario';
+  const fotoUrl = getProfilePictureUrl(perfil.profilePicture);
 
   return (
     <div className="w-full max-w-full space-y-6 box-border">
-      <input type="file" ref={fileInputRef} onChange={handleSubirFoto} accept="image/*" className="hidden" />
       
       {/* HEADER DE LA SECCIÓN */}
       <header className="bg-white border border-gray-100 rounded-2xl flex items-center justify-between p-4 md:p-6 shadow-sm shadow-gray-100/40">
@@ -129,50 +110,28 @@ export const EvaluadorPerfil: React.FC = () => {
           <h2 className="text-lg font-bold text-gray-900 leading-none mb-1">Mi perfil</h2>
           <p className="text-xs text-gray-400">Información de tu cuenta</p>
         </div>
-        <div className="flex items-center gap-3 pl-3 border-l border-gray-100">
-          <div className="relative group shrink-0">
-            {perfil.profilePicture ? (
-              <img 
-                src={`${SERVER_URL}/uploads/${perfil.profilePicture}`} 
-                alt="Avatar" 
-                className="w-9 h-9 rounded-full object-cover border border-gray-200"
-              />
-            ) : (
-              <div className="w-9 h-9 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm">
-                {iniciales}
-              </div>
-            )}
-          </div>
-          <div className="hidden sm:block text-left">
-            <p className="text-sm font-semibold text-gray-900 leading-tight">{nombreUsuario}</p>
-            <p className="text-xs text-gray-400">{rolUsuario}</p>
-          </div>
-        </div>
       </header>
 
       {/* TARJETA SUPERIOR DE USUARIO */}
       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 w-full">
         <div className="flex items-center gap-4 min-w-0">
           <div className="relative group shrink-0">
-            {perfil.profilePicture ? (
+            {fotoUrl ? (
               <img 
-                src={`${SERVER_URL}/uploads/${perfil.profilePicture}`} 
+                src={fotoUrl} 
                 alt="Avatar" 
                 className="w-16 h-16 rounded-full object-cover border-2 border-gray-200 shadow-xs"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
               />
-            ) : (
+            ) : null}
+            
+            {(!fotoUrl) && (
               <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xl">
                 {iniciales}
               </div>
             )}
-            <button 
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="absolute bottom-0 right-0 p-1.5 bg-black text-white rounded-full shadow hover:bg-gray-800 transition cursor-pointer"
-              title="Cambiar foto de perfil"
-            >
-              <Upload size={12} />
-            </button>
           </div>
           <div className="min-w-0">
             <h3 className="text-base font-bold text-gray-900 leading-snug truncate">{nombreUsuario}</h3>

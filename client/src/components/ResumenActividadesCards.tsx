@@ -23,45 +23,45 @@ export const ResumenActividadesCards: React.FC<ResumenActividadesProps> = ({ act
     {
       titulo: 'Pendientes',
       conteo: pendientes,
-      colorIcono: 'text-slate-500',
-      bgIcono: 'bg-slate-100',
-      borderCard: 'border-slate-100',
+      colorIcono: 'text-[#4b5563]',
+      bgIcono: 'bg-[#f3f4f6]',
+      borderCard: 'border-border',
       icono: Clock,
     },
     {
       titulo: 'En Proceso',
       conteo: enProceso,
-      colorIcono: 'text-blue-600',
-      bgIcono: 'bg-blue-50',
-      borderCard: 'border-blue-100/60',
+      colorIcono: 'text-[#1d4ed8]',
+      bgIcono: 'bg-[#dbeafe]',
+      borderCard: 'border-[#1d4ed8]/20',
       icono: PlayCircle,
     },
     {
       titulo: 'En Revisión',
       conteo: enRevision,
-      colorIcono: 'text-amber-600',
-      bgIcono: 'bg-amber-50',
-      borderCard: 'border-amber-100/60',
+      colorIcono: 'text-[#b45309]',
+      bgIcono: 'bg-[#fef3c7]',
+      borderCard: 'border-[#b45309]/20',
       icono: AlertCircle,
     },
     {
       titulo: 'Completadas',
       conteo: completadas,
-      colorIcono: 'text-emerald-600',
-      bgIcono: 'bg-emerald-50',
-      borderCard: 'border-emerald-100/60',
+      colorIcono: 'text-[#15803d]',
+      bgIcono: 'bg-[#dcfce7]',
+      borderCard: 'border-[#15803d]/20',
       icono: CheckCircle2,
     },
   ];
 
   return (
-    <div className="w-full space-y-3">
+    <div className="w-full space-y-3 font-['Inter',sans-serif]">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider flex items-center gap-2">
-          <Layers size={14} className="text-blue-600" />
-          Resumen de actividades por estado
+        <h3 className="text-xs sm:text-sm font-bold text-[#1a1d2e] lowercase first-letter:uppercase flex items-center gap-2">
+          <Layers size={14} className="text-[#1a1d2e]" />
+          resumen de actividades por estado
         </h3>
-        <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2.5 py-0.5 rounded-full">
+        <span className="text-xs font-bold text-[#6b7280] bg-[#eef0f6] px-2.5 py-0.5 rounded-full">
           Total: {total}
         </span>
       </div>
@@ -74,17 +74,17 @@ export const ResumenActividadesCards: React.FC<ResumenActividadesProps> = ({ act
           return (
             <div
               key={c.titulo}
-              className={`bg-white p-4 rounded-2xl border ${c.borderCard} shadow-sm shadow-gray-100/40 flex items-center justify-between transition-all hover:shadow-md`}
+              className={`bg-white p-4 rounded-2xl border ${c.borderCard} shadow-sm flex items-center justify-between transition-all hover:shadow-md`}
             >
               <div className="space-y-1">
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">
+                <p className="text-[11px] sm:text-xs font-medium text-[#6b7280] lowercase first-letter:uppercase">
                   {c.titulo}
                 </p>
                 <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-extrabold text-gray-900 leading-none">
+                  <span className="text-2xl font-extrabold text-[#1a1d2e] leading-none">
                     {c.conteo}
                   </span>
-                  <span className="text-[10px] font-bold text-gray-400">
+                  <span className="text-[10px] font-bold text-foreground-muted">
                     ({porcentaje}%)
                   </span>
                 </div>

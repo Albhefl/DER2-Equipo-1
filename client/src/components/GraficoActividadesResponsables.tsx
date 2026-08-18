@@ -53,7 +53,7 @@ export const GraficoActividadesResponsables: React.FC<Props> = ({ actividades })
             <Users size={16} />
           </div>
           <div>
-            <h3 className="text-xs font-bold text-gray-900 uppercase tracking-wider">
+            <h3 className="text-xs sm:text-sm font-bold text-[#1a1d2e] lowercase first-letter:uppercase">
               Carga de trabajo por responsable
             </h3>
             <p className="text-[11px] text-gray-400 font-medium">
@@ -94,7 +94,7 @@ export const GraficoActividadesResponsables: React.FC<Props> = ({ actividades })
                     className={`h-full rounded-full transition-all duration-500 ease-out ${
                       esSinAsignar 
                         ? 'bg-amber-400' 
-                        : 'bg-indigo-600'
+                        : 'bg-[#1a1d2e]'
                     }`}
                     style={{ width: `${porcentajeRelativo}%` }}
                   />

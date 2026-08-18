@@ -1,20 +1,42 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, X } from 'lucide-react';
+import { Lock, X, Camera, CheckCircle2 } from 'lucide-react';
+import { API_BASE_URL, SERVER_URL } from '../config/api';
+
+const API_PROYECTOS_URL = `${API_BASE_URL}/actividades/proyectos`;
+const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
+
+const getInitials = (name?: string) => {
+  if (!name) return 'EV';
+  const cleanName = name.trim();
+  const parts = cleanName.split(/\s+/);
+  if (parts.length >= 2) {
+    return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+  } else {
+    return parts[0][0].toUpperCase();
+  }
+};
 
 export const EditarPerfilEvaluador: React.FC = () => {
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Estados para controlar los inputs principales del perfil
-  const [nombre, setNombre] = useState('María González');
-  const [correo, setCorreo] = useState('mgonzalez@gmail.itd.edu.mx');
-  const [telefono, setTelefono] = useState('+52 222 123 4567');
-  const [ciudad, setCiudad] = useState('Tehuacán, Puebla, México');
-  const [nacimiento, setNacimiento] = useState('15 de enero de 2002');
-  const [pais, setPais] = useState('México');
+  // Estados dinámicos de información personal
+  const [nombre, setNombre] = useState('');
+  const [correo, setCorreo] = useState('');
+  const [telefono, setTelefono] = useState('');
+  const [ciudad, setCiudad] = useState('');
+  const [nacimiento, setNacimiento] = useState('');
+  const [pais, setPais] = useState('');
+  const [profilePicture, setProfilePicture] = useState('');
 
-  // Estado para simular la carga al guardar el perfil principal
+  // Estadísticas
+  const [totalProyectos, setTotalProyectos] = useState(0);
+  const [totalActividades, setTotalActividades] = useState(0);
+
+  // Estado para simular la carga al guardar y para la notificación Toast elegante
   const [isSaving, setIsSaving] = useState(false);
+  const [showToast, setShowToast] = useState(false);
 
   // --- ESTADOS PARA LA VENTANA MODAL DE CAMBIAR CONTRASEÑA ---
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -24,18 +46,97 @@ export const EditarPerfilEvaluador: React.FC = () => {
   const [errorPassword, setErrorPassword] = useState('');
   const [successPassword, setSuccessPassword] = useState('');
 
+  // Cargar datos iniciales
+  useEffect(() => {
+    const cargarDatos = async () => {
+      const userStored = localStorage.getItem('user');
+      if (userStored) {
+        try {
+          const parsed = JSON.parse(userStored);
+          setNombre(parsed.name || '');
+          setCorreo(parsed.email || '');
+          setTelefono(parsed.telefono || '+52 222 123 4567');
+          setCiudad(parsed.ciudad || 'Tehuacán, Puebla, México');
+          setNacimiento(parsed.nacimiento || '15 de enero de 2002');
+          setPais(parsed.pais || 'México');
+          setProfilePicture(parsed.profilePicture || '');
+        } catch (err) {
+          console.error('Error al parsear usuario de localStorage:', err);
+        }
+      }
+
+      // Cargar estadísticas
+      try {
+        const token = localStorage.getItem('token');
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const [resProyectos, resActividades] = await Promise.all([
+          fetch(API_PROYECTOS_URL, { headers }),
+          fetch(API_ACTIVIDADES_URL, { headers })
+        ]);
+
+        if (resProyectos.ok) {
+          const dataP = await resProyectos.json();
+          setTotalProyectos((dataP.proyectos || []).length);
+        }
+
+        if (resActividades.ok) {
+          const dataA = await resActividades.json();
+          setTotalActividades((dataA.actividades || []).length);
+        }
+      } catch (err) {
+        console.error('Error al cargar estadísticas:', err);
+      }
+    };
+
+    cargarDatos();
+  }, []);
+
+  // Manejador para seleccionar/subir una nueva foto
+  const manejarSeleccionFoto = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfilePicture(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // Función para guardar los cambios generales del perfil
   const manejarGuardarPerfil = (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
+
+    const userStored = localStorage.getItem('user');
+    const userObj = userStored ? JSON.parse(userStored) : {};
+
+    const usuarioActualizado = {
+      ...userObj,
+      name: nombre,
+      email: correo,
+      telefono,
+      ciudad,
+      nacimiento,
+      pais,
+      profilePicture,
+    };
+
+    localStorage.setItem('user', JSON.stringify(usuarioActualizado));
+
     setTimeout(() => {
       setIsSaving(false);
-      alert('¡Información personal actualizada con éxito en el cliente!');
-      navigate('/evaluador-perfil');
-    }, 1200);
+      setShowToast(true);
+
+      // Redirigir suavemente tras mostrar la notificación
+      setTimeout(() => {
+        navigate('/evaluador-perfil');
+      }, 1500);
+    }, 1000);
   };
 
-  // Lógica de validación para el cambio seguro de contraseña
+  // Lógica de cambio de contraseña
   const manejarCambioContrasena = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorPassword('');
@@ -57,61 +158,98 @@ export const EditarPerfilEvaluador: React.FC = () => {
     }
 
     setSuccessPassword('¡Contraseña actualizada de forma segura!');
-    
+
     setTimeout(() => {
       setPasswordActual('');
-      setPasswordNueva(''); // 🟢 Solución del linter aplicada correctamente
+      setPasswordNueva('');
       setPasswordConfirmar('');
       setSuccessPassword('');
       setIsModalOpen(false);
     }, 1500);
   };
 
+  const iniciales = getInitials(nombre);
+
   return (
-    <div className="w-full max-w-full space-y-6 box-border">
+    <div className="w-full max-w-full space-y-6 box-border relative">
       
-      {/* TOPBAR ADAPTADO COMO CARD */}
+      {/* NOTIFICACIÓN TOAST ELEGANTE EN LA ESQUINA SUPERIOR DERECHA */}
+      {showToast && (
+        <div className="fixed top-6 right-6 z-50 flex items-center gap-3 bg-white border border-green-100 shadow-xl shadow-green-900/5 px-4 py-3 rounded-2xl animate-bounce-in transition-all">
+          <CheckCircle2 className="text-green-500 shrink-0" size={20} />
+          <div>
+            <p className="text-xs font-bold text-gray-900">¡Perfil actualizado!</p>
+            <p className="text-[11px] text-gray-400 font-medium">Los cambios se guardaron correctamente.</p>
+          </div>
+          <button 
+            type="button" 
+            onClick={() => setShowToast(false)} 
+            className="text-gray-300 hover:text-gray-500 ml-2 transition-colors"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* HEADER DE LA SECCIÓN */}
       <header className="bg-white border border-gray-100 rounded-2xl flex items-center justify-between p-4 md:p-6 shadow-sm shadow-gray-100/40">
         <div>
           <h2 className="text-lg font-bold text-gray-900 leading-none mb-1">Mi perfil</h2>
           <p className="text-xs text-gray-400">Actualiza tu información personal</p>
         </div>
-        <div className="flex items-center gap-3 pl-3 border-l border-gray-100">
-          <div className="w-9 h-9 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-sm shrink-0">MG</div>
-          <div className="hidden sm:block text-left">
-            <p className="text-sm font-semibold text-gray-900 leading-tight">María González</p>
-            <p className="text-xs text-gray-400">Evaluador</p>
-          </div>
-        </div>
       </header>
 
-      {/* TARJETA SUPERIOR DE USUARIO */}
+      {/* TARJETA SUPERIOR DE USUARIO CON BOTÓN "CAMBIAR FOTO" */}
       <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 w-full box-border">
         <div className="flex items-center gap-4 min-w-0">
-          <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xl shrink-0">
-            MG
+          
+          <div className="relative group shrink-0 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+            {profilePicture ? (
+              <img 
+                src={profilePicture.startsWith('data:') ? profilePicture : `${SERVER_URL}/uploads/${profilePicture}`} 
+                alt="Avatar" 
+                className="w-16 h-16 rounded-full object-cover border-2 border-gray-200" 
+              />
+            ) : (
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold text-xl">
+                {iniciales}
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Camera size={18} className="text-white" />
+            </div>
           </div>
+
           <div className="min-w-0">
-            <h3 className="text-base font-bold text-gray-900 leading-snug truncate">María González</h3>
+            <h3 className="text-base font-bold text-gray-900 leading-snug truncate">{nombre || 'Cargando...'}</h3>
             <p className="text-xs text-gray-400 font-medium mt-0.5 truncate">{correo}</p>
             <p className="text-[11px] text-gray-400 font-medium mt-1 leading-normal">
               {telefono} <span className="hidden xs:inline">•</span> <span className="block xs:inline">{ciudad}</span>
             </p>
           </div>
         </div>
+
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={manejarSeleccionFoto} 
+          accept="image/*" 
+          className="hidden" 
+        />
         <button 
           type="button"
-          onClick={manejarGuardarPerfil}
-          className="text-xs font-bold text-white bg-blue-600 px-4 py-2 rounded-xl hover:bg-blue-700 transition-all shadow-sm w-full sm:w-auto shrink-0"
+          onClick={() => fileInputRef.current?.click()}
+          className="text-xs font-bold text-gray-700 bg-gray-50 border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-100 transition-all shadow-xs flex items-center gap-2 w-full sm:w-auto shrink-0 justify-center"
         >
-          {isSaving ? 'Guardando...' : 'Guardar todo'}
+          <Camera size={14} />
+          Cambiar foto de perfil
         </button>
       </div>
 
       {/* FORMULARIO Y SECCIONES EN REJILLA */}
       <form onSubmit={manejarGuardarPerfil} className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
         
-        {/* FORMULARIO: INFORMACIÓN PERSONAL MODIFICABLE */}
+        {/* FORMULARIO: INFORMACIÓN PERSONAL */}
         <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 lg:col-span-7 space-y-5 w-full box-border">
           <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2">Información personal</h4>
           
@@ -143,8 +281,8 @@ export const EditarPerfilEvaluador: React.FC = () => {
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button type="submit" className="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-50">
-              Guardar cambios
+            <button type="submit" disabled={isSaving} className="px-5 py-2 text-xs font-bold text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition-colors shadow-sm shadow-blue-50">
+              {isSaving ? 'Guardando...' : 'Guardar cambios'}
             </button>
             <button 
               type="button" 
@@ -159,7 +297,6 @@ export const EditarPerfilEvaluador: React.FC = () => {
         {/* COLUMNA DERECHA: SEGURIDAD Y ESTADÍSTICAS */}
         <div className="lg:col-span-5 space-y-6 w-full">
           
-          {/* TARJETA SEGURIDAD (Abre la modal al dar clic) */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-4 w-full box-border">
             <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2">Seguridad</h4>
             <div>
@@ -178,20 +315,19 @@ export const EditarPerfilEvaluador: React.FC = () => {
             </div>
           </div>
 
-          {/* TARJETA ESTADÍSTICAS PERSONALES */}
           <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm shadow-gray-100/40 space-y-4 w-full box-border">
             <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider border-b border-gray-50 pb-2">Estadísticas personales</h4>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="bg-blue-50/40 border border-blue-50/80 p-3 rounded-xl flex flex-col justify-center items-center">
-                <p className="text-lg font-black text-blue-600 mb-0.5">6</p>
+                <p className="text-lg font-black text-blue-600 mb-0.5">{totalProyectos}</p>
                 <p className="text-[8px] md:text-[9px] text-gray-400 font-bold leading-tight uppercase tracking-tight">Proyectos asignados</p>
               </div>
               <div className="bg-green-50/40 border border-green-50/80 p-3 rounded-xl flex flex-col justify-center items-center">
-                <p className="text-lg font-black text-green-600 mb-0.5">18</p>
+                <p className="text-lg font-black text-green-600 mb-0.5">{totalActividades}</p>
                 <p className="text-[8px] md:text-[9px] text-gray-400 font-bold leading-tight uppercase tracking-tight">Evaluaciones realizadas</p>
               </div>
               <div className="bg-amber-50/40 border border-amber-50/80 p-3 rounded-xl flex flex-col justify-center items-center">
-                <p className="text-lg font-black text-amber-600 mb-0.5">24</p>
+                <p className="text-lg font-black text-amber-600 mb-0.5">{totalActividades}</p>
                 <p className="text-[8px] md:text-[9px] text-gray-400 font-bold leading-tight uppercase tracking-tight">Actividades revisadas</p>
               </div>
             </div>
@@ -201,7 +337,7 @@ export const EditarPerfilEvaluador: React.FC = () => {
 
       </form>
 
-      {/* VENTANA MODAL PARA EL CAMBIO DE CONTRASEÑA */}
+      {/* MODAL DE CONTRASEÑA */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-[#0F172A]/40 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl border border-gray-100 w-full max-w-md p-6 shadow-xl space-y-4 m-4 relative box-border">
@@ -252,3 +388,5 @@ export const EditarPerfilEvaluador: React.FC = () => {
     </div>
   );
 };
+
+export default EditarPerfilEvaluador;

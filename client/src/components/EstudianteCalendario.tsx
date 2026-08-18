@@ -125,7 +125,7 @@ export const CalendarioFuncional: React.FC = () => {
             const esHoy = day === hoy.getDate() && month === hoy.getMonth() && year === hoy.getFullYear();
 
             return (
-              <div key={i} className={`min-h-[105px] border-b border-r border-gray-100 p-2 ${!day ? 'bg-gray-50/40' : 'hover:bg-gray-50/50 transition'}`}>
+              <div key={i} className={`min-h-26.25 border-b border-r border-gray-100 p-2 ${!day ? 'bg-gray-50/40' : 'hover:bg-gray-50/50 transition'}`}>
                 {day && (
                   <>
                     <span className={`text-xs font-bold inline-flex w-6 h-6 items-center justify-center rounded-full ${esHoy ? 'bg-black text-white' : 'text-gray-800'}`}>

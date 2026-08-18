@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { 
   Search, Plus, Edit2, Clock, CheckCircle2, AlertCircle, 
-  Eye, CheckSquare, ArrowLeft, Send, Link as LinkIcon, FileText, Paperclip, Folder, Circle, Package, Upload, Trash2, X
+  Eye, CheckSquare, ArrowLeft, Send, FileText, Paperclip, Folder, Circle, Trash2,
+  X, CheckCircle, XCircle, Lock, Upload, Link as LinkIcon
 } from 'lucide-react';
 
 import { API_BASE_URL, SERVER_URL } from '../config/api';
+import { obtenerMananaISO, validarFechaLimiteTarea, formatearFechaCorta } from '../utils/dateUtils';
 
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 const API_USUARIOS_URL = `${API_BASE_URL}/usuarios`;
@@ -53,18 +55,26 @@ function mapStatusToPrisma(s: string): EstadoActividad {
 }
 
 function formatearFecha(f?: string) {
-  if (!f) return '23/05/2026';
+  if (!f) return '—';
   const d = new Date(f);
-  return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+  return `${d.getUTCDate().toString().padStart(2, '0')}/${(d.getUTCMonth() + 1).toString().padStart(2, '0')}/${d.getUTCFullYear()}`;
 }
 
 function formatearFechaInput(f?: string) {
   if (!f) return '';
   const d = new Date(f);
-  const anio = d.getFullYear();
-  const mes = String(d.getMonth() + 1).padStart(2, '0');
-  const dia = String(d.getDate()).padStart(2, '0');
+  const anio = d.getUTCFullYear();
+  const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dia = String(d.getUTCDate()).padStart(2, '0');
   return `${anio}-${mes}-${dia}`;
+}
+
+function formatearFechaHora(f?: string) {
+  if (!f) return 'No disponible';
+  const d = new Date(f);
+  const fecha = `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+  const hora = d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return `${fecha} ${hora}`;
 }
 
 interface Miembro {
@@ -73,9 +83,16 @@ interface Miembro {
   email: string;
 }
 
+interface MiembroProyecto {
+  id: string;
+  user: Miembro;
+}
+
 interface ProyectoSimple {
   id: string;
   name: string;
+  members?: MiembroProyecto[];
+  endDate?: string | null;
 }
 
 interface Actividad {
@@ -89,6 +106,7 @@ interface Actividad {
   projectId?: string | null;
   project?: ProyectoSimple | null;
   assignees: { user: Miembro }[];
+  creator?: { id: string; name: string } | null;
 }
 
 interface Comentario {
@@ -113,22 +131,51 @@ interface EvaluacionData {
   createdAt?: string;
 }
 
-function abrirEvidenciaUrl(url: string) {
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    window.open(url, '_blank');
-  } else {
-    window.open(`${SERVER_URL}/uploads/${url}`, '_blank');
-  }
+type ToastTipo = 'success' | 'error';
+interface ToastMsg {
+  id: number;
+  tipo: ToastTipo;
+  mensaje: string;
 }
 
-function getUserNameFromStorage() {
-  try {
-    const userStr = localStorage.getItem('user');
-    if (!userStr) return 'Estudiante';
-    const user = JSON.parse(userStr);
-    return user.name || 'Estudiante';
-  } catch {
-    return 'Estudiante';
+function ToastContainer({ toasts, onClose }: { toasts: ToastMsg[]; onClose: (id: number) => void }) {
+  if (toasts.length === 0) return null;
+  return (
+    <div className="fixed bottom-4 right-4 z-100 flex flex-col gap-2 w-[calc(100%-2rem)] sm:w-auto sm:max-w-sm">
+      {toasts.map(t => (
+        <div
+          key={t.id}
+          role="status"
+          className={`flex items-start gap-2.5 p-3.5 rounded-xl shadow-lg border text-xs font-semibold animate-[fadeIn_0.2s_ease-out] ${
+            t.tipo === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}
+        >
+          {t.tipo === 'success' ? (
+            <CheckCircle size={16} className="shrink-0 mt-0.5 text-emerald-600" />
+          ) : (
+            <XCircle size={16} className="shrink-0 mt-0.5 text-red-600" />
+          )}
+          <span className="flex-1 leading-relaxed">{t.mensaje}</span>
+          <button
+            onClick={() => onClose(t.id)}
+            className="shrink-0 text-current opacity-50 hover:opacity-100 transition cursor-pointer"
+            aria-label="Cerrar notificación"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function abrirEvidenciaUrl(url: string) {
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    window.open(url, '_blank', 'noopener,noreferrer');
+  } else {
+    window.open(`${SERVER_URL}/uploads/${url}`, '_blank', 'noopener,noreferrer');
   }
 }
 
@@ -147,6 +194,9 @@ export const ActividadesPage: React.FC = () => {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState<Actividad | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ fecha_limite?: string }>({});
+
+  const fechaMinima = obtenerMananaISO();
 
   const [formDraft, setFormDraft] = useState({
     nombre: '',
@@ -163,9 +213,37 @@ export const ActividadesPage: React.FC = () => {
   const [evidencias, setEvidencias] = useState<Evidencia[]>([]);
   const [evaluacion, setEvaluacion] = useState<EvaluacionData | null>(null);
   const [nuevaEvidenciaUrl, setNuevaEvidenciaUrl] = useState('');
-  const [mostrandoInputEvidencia, setMostrandoInputEvidencia] = useState(false);
+
+  // Estados para el Modal de Evidencias
+  const [evidenciaModalOpen, setEvidenciaModalOpen] = useState(false);
+  const [evidenciaTab, setEvidenciaTab] = useState<'file' | 'link'>('file');
+  const [evidenciaLinkError, setEvidenciaLinkError] = useState('');
+  const [evidenciaSuccess, setEvidenciaSuccess] = useState('');
+  const [subiendoArchivo, setSubiendoArchivo] = useState(false);
+
+  const [confirmState, setConfirmState] = useState<{
+    type: 'actividad' | 'comentario' | 'evidencia';
+    id: string;
+    title: string;
+    message: string;
+  } | null>(null);
+
+  const [toasts, setToasts] = useState<ToastMsg[]>([]);
+  const toastIdRef = useRef(0);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const mostrarToast = (mensaje: string, tipo: ToastTipo = 'success') => {
+    const id = ++toastIdRef.current;
+    setToasts(prev => [...prev, { id, tipo, mensaje }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
+
+  const cerrarToast = (id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
 
   const getUserIdFromToken = () => {
     try {
@@ -179,12 +257,7 @@ export const ActividadesPage: React.FC = () => {
   };
 
   const currentUserId = getUserIdFromToken();
-  const nombreEstudiante = getUserNameFromStorage();
 
-  // ✅ FIX: ahora esta función siempre re-sincroniza actividadSeleccionada
-  // y vistaDetalle con los datos frescos del backend, buscando por id.
-  // Antes solo asignaba un valor cuando actividadSeleccionada era null,
-  // por eso los cambios de prioridad/estado no se reflejaban tras editar.
   const fetchActividades = async () => {
     setLoading(true);
     try {
@@ -195,20 +268,21 @@ export const ActividadesPage: React.FC = () => {
         const lista: Actividad[] = data.actividades || [];
         setActividades(lista);
 
-        // Re-sincroniza la actividad seleccionada (panel "Detalle rápido")
         setActividadSeleccionada(prev => {
           if (!prev) return lista[0] ?? null;
           return lista.find(a => a.id === prev.id) ?? lista[0] ?? null;
         });
 
-        // Re-sincroniza la actividad en vista de detalle completo, si está abierta
         setVistaDetalle(prev => {
           if (!prev) return prev;
           return lista.find(a => a.id === prev.id) ?? prev;
         });
+      } else {
+        mostrarToast('No se pudieron cargar las actividades.', 'error');
       }
     } catch (err) {
       console.error('Error al cargar actividades:', err);
+      mostrarToast('Error de conexión al cargar actividades.', 'error');
     } finally {
       setLoading(false);
     }
@@ -226,6 +300,7 @@ export const ActividadesPage: React.FC = () => {
       if (resP.ok) setProyectosDisponibles((await resP.json()).proyectos || []);
     } catch (err) {
       console.error('Error al cargar usuarios o proyectos:', err);
+      mostrarToast('Error al cargar usuarios o proyectos.', 'error');
     }
   };
 
@@ -246,6 +321,10 @@ export const ActividadesPage: React.FC = () => {
   }, [searchParams, actividades]);
 
   const projectIdDesdeUrl = searchParams.get('projectId');
+
+  const nombreProyectoActual = projectIdDesdeUrl
+    ? (proyectosDisponibles || []).find(p => p.id === projectIdDesdeUrl)?.name
+    : null;
 
   const fetchEvidenciasDeActividad = async (actividadId: string) => {
     try {
@@ -278,11 +357,31 @@ export const ActividadesPage: React.FC = () => {
 
       fetchEvidenciasDeActividad(vistaDetalle.id);
     }
-  }, [vistaDetalle]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vistaDetalle?.id]);
+
+  const obtenerFechaFinProyectoActual = (): string | null => {
+    const proyecto = (proyectosDisponibles || []).find(p => p.id === formDraft.projectId);
+    return proyecto?.endDate || null;
+  };
+
+  const handleCambiarFechaLimite = (valor: string) => {
+    setFormDraft(prev => ({ ...prev, fecha_limite: valor }));
+    const resultado = validarFechaLimiteTarea(valor, obtenerFechaFinProyectoActual());
+    setFieldErrors(prev => ({ ...prev, fecha_limite: resultado.mensaje || undefined }));
+  };
 
   const handleCrearActividad = async (e: React.FormEvent) => {
     e.preventDefault();
     setModalError(null);
+
+    const resultadoFecha = validarFechaLimiteTarea(formDraft.fecha_limite, obtenerFechaFinProyectoActual());
+    if (!resultadoFecha.valida) {
+      setFieldErrors({ fecha_limite: resultadoFecha.mensaje || undefined });
+      setModalError('Revisa los campos marcados en rojo antes de continuar.');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(API_ACTIVIDADES_URL, {
@@ -302,8 +401,9 @@ export const ActividadesPage: React.FC = () => {
       if (res.ok) {
         setCreateModalOpen(false);
         fetchActividades();
+        mostrarToast('Actividad creada correctamente.', 'success');
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         setModalError(err.message || 'Error al crear la actividad.');
       }
     } catch (err) {
@@ -315,6 +415,14 @@ export const ActividadesPage: React.FC = () => {
     e.preventDefault();
     if (!editModalOpen) return;
     setModalError(null);
+
+    const resultadoFecha = validarFechaLimiteTarea(formDraft.fecha_limite, obtenerFechaFinProyectoActual());
+    if (!resultadoFecha.valida) {
+      setFieldErrors({ fecha_limite: resultadoFecha.mensaje || undefined });
+      setModalError('Revisa los campos marcados en rojo antes de continuar.');
+      return;
+    }
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_ACTIVIDADES_URL}/${editModalOpen.id}`, {
@@ -334,8 +442,9 @@ export const ActividadesPage: React.FC = () => {
       if (res.ok) {
         setEditModalOpen(null);
         fetchActividades();
+        mostrarToast('Cambios guardados correctamente.', 'success');
       } else {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({}));
         setModalError(err.message || 'Error al actualizar actividad.');
       }
     } catch (err) {
@@ -356,49 +465,74 @@ export const ActividadesPage: React.FC = () => {
         const data = await res.json();
         setComentarios([...comentarios, data.comentario]);
         setNuevoComentario('');
+      } else {
+        mostrarToast('No se pudo enviar el comentario.', 'error');
       }
     } catch (err) {
       console.error('Error al comentar:', err);
+      mostrarToast('Error de conexión al enviar el comentario.', 'error');
     }
   };
 
-  const handleEliminarComentario = async (comentarioId: string) => {
-    if (!confirm('¿Deseas eliminar este comentario?')) return;
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_ACTIVIDADES_URL}/comentarios/${comentarioId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.ok) setComentarios(prev => prev.filter(c => c.id !== comentarioId));
-    } catch (err) {
-      console.error('Error al eliminar comentario:', err);
-    }
+  const handleEliminarComentario = (comentarioId: string) => {
+    setConfirmState({
+      type: 'comentario',
+      id: comentarioId,
+      title: 'Eliminar comentario',
+      message: '¿Deseas eliminar este comentario? Esta acción no se puede deshacer.'
+    });
   };
 
+  // Subida de evidencias por Enlace
   const handleSubirEvidenciaLink = async () => {
-    if (!nuevaEvidenciaUrl.trim() || !vistaDetalle) return;
+    setEvidenciaLinkError('');
+    const url = nuevaEvidenciaUrl.trim();
+    
+    if (!url) {
+      setEvidenciaLinkError('El enlace no puede estar vacío.');
+      return;
+    }
+
+    // Validar estructura de URL válida (debe empezar con http:// o https://)
+    const urlRegex = /^https?:\/\/[^\s/$.?#].[^\s]*$/i;
+    if (!urlRegex.test(url)) {
+      setEvidenciaLinkError('Ingresa un enlace válido (ejemplo: https://drive.google.com/...)');
+      return;
+    }
+
+    if (!vistaDetalle) return;
+
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_ACTIVIDADES_URL}/${vistaDetalle.id}/evidencias`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ url: nuevaEvidenciaUrl.trim() })
+        body: JSON.stringify({ url })
       });
+
       if (res.ok) {
         await fetchEvidenciasDeActividad(vistaDetalle.id);
         setNuevaEvidenciaUrl('');
-        setMostrandoInputEvidencia(false);
+        setEvidenciaSuccess('¡Enlace guardado correctamente!');
+        setTimeout(() => {
+          setEvidenciaModalOpen(false);
+          setEvidenciaSuccess('');
+        }, 1500);
+      } else {
+        setEvidenciaLinkError('No se pudo guardar el enlace.');
       }
     } catch (err) {
       console.error('Error al subir evidencia:', err);
+      setEvidenciaLinkError('Error de conexión al guardar enlace.');
     }
   };
 
+  // Subida de evidencias por Archivo Local
   const handleSubirArchivoEvidencia = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !vistaDetalle) return;
 
+    setSubiendoArchivo(true);
     try {
       const token = localStorage.getItem('token');
       const formData = new FormData();
@@ -410,31 +544,147 @@ export const ActividadesPage: React.FC = () => {
         body: formData
       });
 
-      if (res.ok) await fetchEvidenciasDeActividad(vistaDetalle.id);
-      else alert('Error al subir el archivo.');
+      if (res.ok) {
+        await fetchEvidenciasDeActividad(vistaDetalle.id);
+        setEvidenciaSuccess('¡Archivo subido correctamente!');
+        setTimeout(() => {
+          setEvidenciaModalOpen(false);
+          setEvidenciaSuccess('');
+        }, 1500);
+      } else {
+        mostrarToast('Error al subir el archivo.', 'error');
+      }
     } catch (err) {
       console.error('Error al subir archivo:', err);
+      mostrarToast('Error de conexión al subir el archivo.', 'error');
     } finally {
+      setSubiendoArchivo(false);
       if (e.target) e.target.value = '';
     }
   };
 
-  const handleEliminarEvidencia = async (evidenciaId: string) => {
-    if (!confirm('¿Eliminar evidencia?')) return;
-    try {
-      const token = localStorage.getItem('token');
-      await fetch(`${API_ACTIVIDADES_URL}/evidencias/${evidenciaId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setEvidencias(prev => prev.filter(item => item.id !== evidenciaId));
-    } catch (err) {
-      console.error('Error al eliminar evidencia:', err);
+  const handleEliminarEvidencia = (evidenciaId: string) => {
+    setConfirmState({
+      type: 'evidencia',
+      id: evidenciaId,
+      title: 'Eliminar evidencia',
+      message: '¿Eliminar esta evidencia? Esta acción no se puede deshacer.'
+    });
+  };
+
+  const handleEliminarActividad = (actividadId: string) => {
+    setConfirmState({
+      type: 'actividad',
+      id: actividadId,
+      title: 'Eliminar actividad',
+      message: '¿Eliminar esta actividad? Esta acción no se puede deshacer.'
+    });
+  };
+
+  const ejecutarConfirmacion = async () => {
+    if (!confirmState) return;
+    const { type, id } = confirmState;
+    setConfirmState(null);
+
+    const token = localStorage.getItem('token');
+
+    if (type === 'actividad') {
+      try {
+        const res = await fetch(`${API_ACTIVIDADES_URL}/${id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setActividades(prev => prev.filter(a => a.id !== id));
+          if (actividadSeleccionada?.id === id) setActividadSeleccionada(null);
+          if (vistaDetalle?.id === id) setVistaDetalle(null);
+          mostrarToast('Actividad eliminada.', 'success');
+        } else {
+          const err = await res.json().catch(() => ({}));
+          mostrarToast(err.message || 'Error al eliminar la actividad.', 'error');
+        }
+      } catch (err) {
+        console.error('Error al eliminar actividad:', err);
+        mostrarToast('Error de conexión al eliminar.', 'error');
+      }
+      return;
     }
+
+    if (type === 'comentario') {
+      try {
+        const res = await fetch(`${API_ACTIVIDADES_URL}/comentarios/${id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setComentarios(prev => prev.filter(c => c.id !== id));
+          mostrarToast('Comentario eliminado.', 'success');
+        } else {
+          mostrarToast('No se pudo eliminar el comentario.', 'error');
+        }
+      } catch (err) {
+        console.error('Error al eliminar comentario:', err);
+        mostrarToast('Error de conexión al eliminar el comentario.', 'error');
+      }
+      return;
+    }
+
+    if (type === 'evidencia') {
+      try {
+        const res = await fetch(`${API_ACTIVIDADES_URL}/evidencias/${id}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          setEvidencias(prev => prev.filter(item => item.id !== id));
+          mostrarToast('Evidencia eliminada.', 'success');
+        } else {
+          mostrarToast('No se pudo eliminar la evidencia.', 'error');
+        }
+      } catch (err) {
+        console.error('Error al eliminar evidencia:', err);
+        mostrarToast('Error de conexión al eliminar la evidencia.', 'error');
+      }
+      return;
+    }
+  };
+
+  const renderConfirmModal = () => {
+    if (!confirmState) return null;
+    return (
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-70 p-4">
+        <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl space-y-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+              <Trash2 size={18} />
+            </div>
+            <div className="min-w-0 pt-0.5">
+              <h3 className="text-sm font-bold text-gray-900">{confirmState.title}</h3>
+              <p className="text-xs text-gray-500 leading-relaxed mt-1">{confirmState.message}</p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              onClick={() => setConfirmState(null)}
+              className="px-4 py-2 bg-gray-100 text-gray-700 font-bold rounded-xl text-xs cursor-pointer hover:bg-gray-200 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={ejecutarConfirmacion}
+              className="px-4 py-2 bg-red-600 text-white font-bold rounded-xl text-xs cursor-pointer hover:bg-red-700 transition"
+            >
+              Eliminar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const abrirEditar = (act: Actividad) => {
     setModalError(null);
+    setFieldErrors({});
     setEditModalOpen(act);
     setFormDraft({
       nombre: act.name,
@@ -443,7 +693,7 @@ export const ActividadesPage: React.FC = () => {
       estado: mapStatusToPrisma(act.status),
       prioridad: act.priority || 'HIGH',
       responsableId: act.assignees?.[0]?.user?.id || '',
-      projectId: act.projectId || ''
+      projectId: projectIdDesdeUrl || act.projectId || ''
     });
   };
 
@@ -457,7 +707,7 @@ export const ActividadesPage: React.FC = () => {
     }
   };
 
-  const actividadesFiltradas = actividades.filter(a => {
+  const actividadesFiltradas = (actividades || []).filter(a => {
     const estadoPrisma = mapStatusToPrisma(a.status);
     const coincideEstado = filterStatus === 'Todos' || 
       (filterStatus === 'PENDING' && estadoPrisma === 'PENDING') ||
@@ -465,7 +715,7 @@ export const ActividadesPage: React.FC = () => {
       (filterStatus === 'IN_REVIEW' && estadoPrisma === 'IN_REVIEW') ||
       (filterStatus === 'DONE' && estadoPrisma === 'DONE');
     
-    const coincideBusqueda = a.name.toLowerCase().includes(search.toLowerCase());
+    const coincideBusqueda = (a.name || '').toLowerCase().includes(search.toLowerCase());
     const coincideProyecto = !projectIdDesdeUrl || a.projectId === projectIdDesdeUrl;
 
     return coincideEstado && coincideBusqueda && coincideProyecto;
@@ -479,18 +729,67 @@ export const ActividadesPage: React.FC = () => {
     completadas: actividades.filter(a => mapStatusToPrisma(a.status) === 'DONE').length,
   };
 
+  const proyectoSeleccionadoEnModal = (proyectosDisponibles || []).find(p => p.id === formDraft.projectId);
+  const usuariosFiltradosModal = proyectoSeleccionadoEnModal?.members
+    ? proyectoSeleccionadoEnModal.members.map(m => m.user).filter(Boolean)
+    : (usuariosDisponibles || []);
+
+  const renderCampoProyecto = () => {
+    if (projectIdDesdeUrl) {
+      return (
+        <div>
+          <label className="block font-bold text-gray-700 mb-1">Proyecto Asignado *</label>
+          <div className="w-full p-2.5 bg-gray-100 border border-gray-200 rounded-xl font-semibold text-gray-700 flex items-center justify-between gap-2">
+            <span className="truncate">{nombreProyectoActual || 'Proyecto actual'}</span>
+            <span className="flex items-center gap-1 text-[10px] text-gray-400 font-normal shrink-0">
+              <Lock size={11} /> Fijo a este proyecto
+            </span>
+          </div>
+          <p className="text-[10px] text-gray-400 mt-1">
+            Estás creando actividades dentro de este proyecto, por eso no se puede cambiar aquí.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div>
+        <label className="block font-bold text-gray-700 mb-1">Proyecto Asignado *</label>
+        <select 
+          required
+          value={formDraft.projectId}
+          onChange={e => setFormDraft({ ...formDraft, projectId: e.target.value, responsableId: '' })}
+          className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none font-semibold text-gray-800"
+        >
+          <option value="">-- Selecciona un Proyecto --</option>
+          {(proyectosDisponibles || []).map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      </div>
+    );
+  };
+
   if (vistaDetalle) {
     const badgeObj = ESTADO_BADGES[vistaDetalle.status] || ESTADO_BADGES['PENDING'];
-    const nombreProyecto = proyectosDisponibles.find(p => p.id === vistaDetalle.projectId)?.name || 'ClassBoard Equipo A';
-    const comentariosVisibles = comentarios.filter(c => !c.content.startsWith('__EVALUACION_JSON__:'));
+    const nombreProyecto = (proyectosDisponibles || []).find(p => p.id === vistaDetalle.projectId)?.name || 'Sin proyecto asignado';
+    const comentariosVisibles = (comentarios || []).filter(c => !c.content?.startsWith('__EVALUACION_JSON__:'));
 
     return (
       <div className="p-4 sm:p-6 space-y-6 w-full font-sans antialiased text-gray-900 box-border">
-        <input type="file" ref={fileInputRef} onChange={handleSubirArchivoEvidencia} accept=".pdf,.docx,.doc,.png,.jpg,.zip" className="hidden" />
+        <input 
+          type="file" 
+          ref={fileInputRef} 
+          onChange={handleSubirArchivoEvidencia} 
+          accept=".pdf,.docx,.doc,.png,.jpg,.zip" 
+          className="hidden" 
+        />
+        {renderConfirmModal()}
+        <ToastContainer toasts={toasts} onClose={cerrarToast} />
 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 min-w-0 pr-2">
-            <button onClick={() => setVistaDetalle(null)} className="p-1 text-gray-400 hover:text-gray-700 transition cursor-pointer shrink-0">
+            <button onClick={() => setVistaDetalle(null)} className="p-1 text-gray-400 hover:text-gray-700 transition cursor-pointer shrink-0" aria-label="Volver">
               <ArrowLeft size={20} />
             </button>
             <div className="min-w-0">
@@ -503,6 +802,14 @@ export const ActividadesPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-2 text-xs shrink-0">
             <span className={`px-3 py-1 rounded-full text-xs font-medium ${badgeObj.cls}`}>{badgeObj.label}</span>
+            <button
+              onClick={() => handleEliminarActividad(vistaDetalle.id)}
+              className="p-2 text-gray-400 hover:text-red-600 transition cursor-pointer"
+              title="Eliminar actividad"
+              aria-label="Eliminar actividad"
+            >
+              <Trash2 size={16} />
+            </button>
           </div>
         </div>
 
@@ -510,14 +817,14 @@ export const ActividadesPage: React.FC = () => {
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-xs space-y-4">
               <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Descripción</h3>
-              <p className="text-xs text-gray-600 leading-relaxed break-words">
-                {vistaDetalle.description || 'Analizar necesidades y comportamientos de los usuarios del sistema.'}
+              <p className="text-xs text-gray-600 leading-relaxed wrap-break-word">
+                {vistaDetalle.description || 'Sin descripción registrada.'}
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-gray-50 text-xs">
                 <div>
                   <p className="text-gray-400 font-medium">Responsable</p>
-                  <p className="font-bold text-gray-800 mt-0.5 truncate">{vistaDetalle.assignees?.[0]?.user?.name || 'Ana García'}</p>
+                  <p className="font-bold text-gray-800 mt-0.5 truncate">{vistaDetalle.assignees?.[0]?.user?.name || 'Sin asignar'}</p>
                 </div>
                 <div>
                   <p className="text-gray-400 font-medium">Prioridad</p>
@@ -537,21 +844,21 @@ export const ActividadesPage: React.FC = () => {
                 {comentariosVisibles.map((c) => (
                   <div key={c.id} className="flex gap-3 text-xs">
                     <div className="w-7 h-7 rounded-full bg-gray-100 text-gray-700 font-bold flex items-center justify-center shrink-0 text-[10px]">
-                      {c.author?.name ? c.author.name.slice(0, 2).toUpperCase() : 'AG'}
+                      {c.author?.name ? c.author.name.slice(0, 2).toUpperCase() : '—'}
                     </div>
                     <div className="flex-1 bg-gray-50/60 p-3 rounded-xl border border-gray-100 space-y-1 min-w-0">
                       <div className="flex justify-between items-center gap-2">
-                        <span className="font-bold text-gray-800 truncate">{c.author?.name || 'Ana García'}</span>
+                        <span className="font-bold text-gray-800 truncate">{c.author?.name || 'Usuario'}</span>
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-[10px] text-gray-400">{formatearFecha(c.createdAt)}</span>
                           {String(c.author?.id) === String(currentUserId) && (
-                            <button onClick={() => handleEliminarComentario(c.id)} className="text-gray-400 hover:text-red-600 transition p-0.5 cursor-pointer">
+                            <button onClick={() => handleEliminarComentario(c.id)} className="text-gray-400 hover:text-red-600 transition p-0.5 cursor-pointer" aria-label="Eliminar comentario">
                               <Trash2 size={12} />
                             </button>
                           )}
                         </div>
                       </div>
-                      <p className="text-gray-600 leading-normal break-words">{c.content}</p>
+                      <p className="text-gray-600 leading-normal wrap-break-word">{c.content}</p>
                     </div>
                   </div>
                 ))}
@@ -567,7 +874,7 @@ export const ActividadesPage: React.FC = () => {
                   onKeyDown={e => e.key === 'Enter' && handleEnviarComentario()}
                   className="flex-1 p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none focus:bg-white min-w-0"
                 />
-                <button onClick={handleEnviarComentario} className="p-3 bg-black text-white rounded-xl hover:bg-gray-900 transition flex items-center justify-center cursor-pointer shrink-0">
+                <button onClick={handleEnviarComentario} className="p-3 bg-black text-white rounded-xl hover:bg-gray-900 transition flex items-center justify-center cursor-pointer shrink-0" aria-label="Enviar comentario">
                   <Send size={14} />
                 </button>
               </div>
@@ -575,57 +882,59 @@ export const ActividadesPage: React.FC = () => {
           </div>
 
           <div className="space-y-6">
+            {/* Tarjeta de Evidencias */}
             <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm space-y-4">
-              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">Evidencias ({evidencias.length})</h3>
+              <h3 className="text-xs font-bold text-gray-800 uppercase tracking-wider">
+                EVIDENCIAS ({(evidencias || []).length})
+              </h3>
 
               <div className="space-y-2">
-                {evidencias.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between p-2.5 bg-gray-50/80 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700 gap-2">
+                {(evidencias || []).map((e) => (
+                  <div 
+                    key={e.id} 
+                    className="flex items-center justify-between p-2.5 bg-gray-50/80 rounded-xl border border-gray-100 text-xs font-semibold text-gray-700 gap-2"
+                  >
                     <div className="flex items-center gap-2 truncate min-w-0 flex-1">
-                      <FileText size={14} className="text-gray-500 shrink-0" />
-                      <button type="button" onClick={() => abrirEvidenciaUrl(e.url)} className="truncate font-bold text-gray-800 hover:underline text-left cursor-pointer">
+                      {e.url.startsWith('http') ? (
+                        <LinkIcon size={14} className="text-blue-500 shrink-0" />
+                      ) : (
+                        <FileText size={14} className="text-gray-500 shrink-0" />
+                      )}
+                      <button 
+                        type="button" 
+                        onClick={() => abrirEvidenciaUrl(e.url)} 
+                        className="truncate font-bold text-gray-800 hover:underline text-left cursor-pointer"
+                      >
                         {e.url}
                       </button>
                     </div>
-                    <button onClick={() => handleEliminarEvidencia(e.id)} className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0">
+                    <button 
+                      onClick={() => handleEliminarEvidencia(e.id)} 
+                      className="text-gray-400 hover:text-red-600 transition p-1 cursor-pointer shrink-0" 
+                      aria-label="Eliminar evidencia"
+                    >
                       <Trash2 size={13} />
                     </button>
                   </div>
                 ))}
-                {evidencias.length === 0 && <p className="text-xs text-gray-400 italic py-1">Sin evidencias registradas.</p>}
+                {(evidencias || []).length === 0 && (
+                  <p className="text-xs text-gray-400 italic py-1">Sin evidencias registradas.</p>
+                )}
               </div>
 
-              {mostrandoInputEvidencia ? (
-                <div className="space-y-2 pt-2">
-                  <div className="flex gap-2">
-                    <input 
-                      type="text"
-                      value={nuevaEvidenciaUrl}
-                      onChange={e => setNuevaEvidenciaUrl(e.target.value)}
-                      placeholder="Pega un enlace (https://...)"
-                      className="flex-1 p-2 bg-gray-50 border border-gray-200 rounded-xl text-xs focus:outline-none min-w-0"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-xl text-[11px] font-bold text-gray-700 flex items-center gap-1 cursor-pointer shrink-0"
-                    >
-                      <Upload size={13} /> Archivo
-                    </button>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <button onClick={() => setMostrandoInputEvidencia(false)} className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:bg-gray-100 rounded-lg cursor-pointer">Cancelar</button>
-                    <button onClick={handleSubirEvidenciaLink} className="px-3 py-1 text-[11px] font-bold text-white bg-black rounded-lg cursor-pointer">Guardar enlace</button>
-                  </div>
-                </div>
-              ) : (
-                <button 
-                  onClick={() => setMostrandoInputEvidencia(true)}
-                  className="w-full py-2.5 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-600 hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Paperclip size={13} /> Subir evidencia
-                </button>
-              )}
+              {/* Botón desencadenante del modal */}
+              <button 
+                onClick={() => {
+                  setNuevaEvidenciaUrl('');
+                  setEvidenciaLinkError('');
+                  setEvidenciaSuccess('');
+                  setEvidenciaTab('file');
+                  setEvidenciaModalOpen(true);
+                }}
+                className="w-full py-2.5 bg-gray-50 border border-dashed border-gray-300 rounded-xl text-xs font-bold text-gray-700 hover:bg-gray-100 transition flex items-center justify-center gap-1.5 cursor-pointer mt-2"
+              >
+                <Paperclip size={13} /> Adjuntar archivo o enlace
+              </button>
             </div>
 
             {evaluacion && (
@@ -635,7 +944,7 @@ export const ActividadesPage: React.FC = () => {
                   <span className="text-blue-700 font-extrabold text-sm">{evaluacion.score} / 10</span>
                 </div>
                 <div className="space-y-1.5 pt-2 border-t border-blue-100">
-                  {evaluacion.criteria?.map((crit) => (
+                  {(evaluacion.criteria || []).map((crit) => (
                     <div key={crit.id} className="flex justify-between text-gray-600">
                       <span>{crit.nombre}</span>
                       <span className="font-bold">{crit.score}/5</span>
@@ -655,37 +964,144 @@ export const ActividadesPage: React.FC = () => {
               </div>
               <div className="flex justify-between text-gray-500">
                 <span>Creada el</span>
-                <span className="font-bold text-gray-800">10/05/2026 10:30 a.m.</span>
+                <span className="font-bold text-gray-800">{formatearFechaHora(vistaDetalle.createdAt)}</span>
               </div>
-              <div className="flex justify-between text-gray-500">
-                <span>Creada por</span>
-                <span className="font-bold text-gray-800">Juan Pérez</span>
-              </div>
+              {/*<div className="flex justify-between text-gray-500">
+                /*<span>Creada por</span>
+                <span className="font-bold text-gray-800">{vistaDetalle.creator?.name || 'No disponible'}</span>
+              </div>*/}
             </div>
           </div>
         </div>
+
+        {/* Modal para Subir Evidencias */}
+        {evidenciaModalOpen && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl space-y-4 relative">
+              <h3 className="text-sm font-bold text-gray-900 uppercase">ADJUNTAR EVIDENCIA</h3>
+              <p className="text-xs text-gray-400">Selecciona el tipo de entrega que deseas registrar.</p>
+
+              {/* Control de Pestañas (Tabs) */}
+              <div className="flex bg-gray-100 p-1 rounded-xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setEvidenciaTab('file'); setEvidenciaSuccess(''); }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    evidenciaTab === 'file' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  Archivo local (PDF/DOCX)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEvidenciaTab('link'); setEvidenciaSuccess(''); }}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
+                    evidenciaTab === 'link' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-900'
+                  }`}
+                >
+                  Enlace Web
+                </button>
+              </div>
+
+              {/* Contenido según pestaña activa */}
+              {evidenciaSuccess ? (
+                <div className="py-8 flex flex-col items-center justify-center space-y-3 bg-emerald-50 rounded-xl border border-emerald-100">
+                  <CheckCircle2 size={32} className="text-emerald-500" />
+                  <p className="text-sm font-bold text-emerald-700">{evidenciaSuccess}</p>
+                </div>
+              ) : (
+                <>
+                  {evidenciaTab === 'file' && (
+                    <div className="space-y-3 py-2 text-center">
+                      <div 
+                        onClick={() => !subiendoArchivo && fileInputRef.current?.click()}
+                        className="border-2 border-dashed border-gray-200 hover:border-gray-400 p-6 rounded-2xl cursor-pointer transition flex flex-col items-center gap-2 bg-gray-50/50"
+                      >
+                        <Upload size={24} className="text-gray-400" />
+                        <p className="text-xs font-bold text-gray-700">
+                          {subiendoArchivo ? 'Subiendo archivo...' : 'Haz clic aquí para examinar tus archivos'}
+                        </p>
+                        <p className="text-[10px] text-gray-400">Formatos soportados: PDF, DOCX, PNG, ZIP</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {evidenciaTab === 'link' && (
+                    <div className="space-y-3 py-2">
+                      <label className="block text-xs font-bold text-gray-700">Enlace URL *</label>
+                      <input 
+                        type="url"
+                        placeholder="https://drive.google.com/..."
+                        value={nuevaEvidenciaUrl}
+                        onChange={e => {
+                          setNuevaEvidenciaUrl(e.target.value);
+                          setEvidenciaLinkError('');
+                        }}
+                        className={`w-full p-2.5 bg-gray-50 border ${
+                          evidenciaLinkError ? 'border-red-500' : 'border-gray-200'
+                        } rounded-xl text-xs font-medium focus:outline-none focus:bg-white`}
+                      />
+                      {evidenciaLinkError && (
+                        <p className="text-red-500 text-xs font-semibold">{evidenciaLinkError}</p>
+                      )}
+                      
+                      <button
+                        type="button"
+                        onClick={handleSubirEvidenciaLink}
+                        className="w-full py-2.5 bg-black text-white rounded-xl text-xs font-bold hover:bg-gray-900 transition mt-2 cursor-pointer"
+                      >
+                        Guardar enlace
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Cierre del Modal */}
+              {!evidenciaSuccess && (
+                <div className="flex justify-end pt-2 border-t border-gray-50">
+                  <button 
+                    type="button"
+                    onClick={() => setEvidenciaModalOpen(false)}
+                    className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div className="p-4 sm:p-6 space-y-5 w-full font-sans antialiased text-gray-900 box-border relative">
+      {renderConfirmModal()}
+      <ToastContainer toasts={toasts} onClose={cerrarToast} />
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-gray-900 tracking-tight truncate">Actividades</h1>
-          <p className="text-xs text-gray-400 font-medium mt-0.5 truncate">Proyecto: ClassBoard Equipo A</p>
+          <p className="text-xs text-gray-400 font-medium mt-0.5 truncate">
+            {nombreProyectoActual ? `Proyecto: ${nombreProyectoActual}` : 'Todas las actividades'}
+          </p>
         </div>
         <button 
           onClick={() => {
             setModalError(null);
+            setFieldErrors({});
+            const primerProyectoId = (proyectosDisponibles && proyectosDisponibles.length > 0) ? proyectosDisponibles[0].id : '';
+            const initialProjectId = projectIdDesdeUrl || primerProyectoId;
             setFormDraft({
               nombre: '',
               descripcion: '',
-              fecha_limite: new Date().toISOString().split('T')[0],
+              fecha_limite: fechaMinima,
               estado: 'PENDING',
               prioridad: 'HIGH',
               responsableId: '',
-              projectId: proyectosDisponibles[0]?.id || ''
+              projectId: initialProjectId
             });
             setCreateModalOpen(true);
           }}
@@ -815,6 +1231,17 @@ export const ActividadesPage: React.FC = () => {
                     >
                       <Edit2 size={13} /> Editar
                     </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEliminarActividad(act.id);
+                      }}
+                      className="flex items-center gap-1 text-gray-400 hover:text-red-600 text-xs font-bold px-1 transition cursor-pointer"
+                      title="Eliminar actividad"
+                      aria-label="Eliminar actividad"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
                 </div>
               );
@@ -832,7 +1259,7 @@ export const ActividadesPage: React.FC = () => {
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">DETALLE RÁPIDO</p>
               <h3 className="font-bold text-gray-900 text-sm leading-snug">{actividadSeleccionada.name}</h3>
               <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
-                {actividadSeleccionada.description || 'Analizar necesidades y comportamientos de los usuarios del sistema.'}
+                {actividadSeleccionada.description || 'Sin descripción registrada.'}
               </p>
             </div>
 
@@ -847,34 +1274,23 @@ export const ActividadesPage: React.FC = () => {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Fecha de inicio</span>
-                <span className="font-bold text-gray-800">10/05/2025</span>
+                <span className="font-bold text-gray-800">{formatearFecha(actividadSeleccionada.createdAt)}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-400 font-medium">Responsable</span>
                 <span className="font-bold text-gray-800">
-                  {actividadSeleccionada.assignees?.[0]?.user?.name || 'Ana García'}
+                  {actividadSeleccionada.assignees?.[0]?.user?.name || 'Sin asignar'}
                 </span>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-50 pt-3 space-y-2">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Checklist</p>
-              <div className="space-y-1.5">
-                {['Definir segmentos de usuarios', 'Diseñar encuesta', 'Aplicar entrevistas', 'Analizar resultados'].map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-2 text-xs text-gray-600 font-medium">
-                    <CheckSquare size={13} className="text-slate-800 shrink-0" />
-                    <span>{item}</span>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
         )}
       </div>
 
+      {/* Modal Crear Actividad */}
       {createModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4 relative">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4 relative max-h-[90vh] overflow-y-auto">
             <h3 className="text-sm font-bold text-gray-900 uppercase">Crear actividad</h3>
             <p className="text-xs text-gray-400">Completa los datos para la nueva actividad.</p>
             {modalError && (
@@ -884,20 +1300,7 @@ export const ActividadesPage: React.FC = () => {
             )}
 
             <form onSubmit={handleCrearActividad} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Proyecto Asignado *</label>
-                <select 
-                  required
-                  value={formDraft.projectId}
-                  onChange={e => setFormDraft({ ...formDraft, projectId: e.target.value })}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none font-semibold text-gray-800"
-                >
-                  <option value="">-- Selecciona un Proyecto --</option>
-                  {proyectosDisponibles.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
+              {renderCampoProyecto()}
 
               <div>
                 <label className="block font-bold text-gray-700 mb-1">Título de la actividad *</label>
@@ -917,10 +1320,22 @@ export const ActividadesPage: React.FC = () => {
                   <input 
                     type="date"
                     required
+                    min={fechaMinima}
+                    max={obtenerFechaFinProyectoActual() || undefined}
                     value={formDraft.fecha_limite}
-                    onChange={e => setFormDraft({ ...formDraft, fecha_limite: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
+                    onChange={e => handleCambiarFechaLimite(e.target.value)}
+                    className={`w-full p-2.5 border rounded-xl focus:outline-none ${
+                      fieldErrors.fecha_limite ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200'
+                    }`}
                   />
+                  {fieldErrors.fecha_limite && (
+                    <p className="text-[11px] text-red-600 font-semibold mt-1 leading-snug">{fieldErrors.fecha_limite}</p>
+                  )}
+                  {!fieldErrors.fecha_limite && obtenerFechaFinProyectoActual() && (
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      Este proyecto cierra el {formatearFechaCorta(obtenerFechaFinProyectoActual())}; la fecha límite no puede ser posterior.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Estado *</label>
@@ -958,8 +1373,8 @@ export const ActividadesPage: React.FC = () => {
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
                   >
                     <option value="">-- Seleccionar --</option>
-                    {usuariosDisponibles.map(u => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
+                    {(usuariosFiltradosModal || []).map(u => (
+                      <option key={u?.id} value={u?.id}>{u?.name}</option>
                     ))}
                   </select>
                 </div>
@@ -996,7 +1411,8 @@ export const ActividadesPage: React.FC = () => {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-sm cursor-pointer"
+                  disabled={!!fieldErrors.fecha_limite}
+                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Crear actividad
                 </button>
@@ -1006,9 +1422,10 @@ export const ActividadesPage: React.FC = () => {
         </div>
       )}
 
+      {/* Modal Editar Actividad */}
       {editModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4 relative">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl space-y-4 relative max-h-[90vh] overflow-y-auto">
             <h3 className="text-sm font-bold text-gray-900 uppercase">Editar Actividad</h3>
             <p className="text-xs text-gray-400">Modifica los datos de la actividad seleccionada.</p>
             {modalError && (
@@ -1018,20 +1435,7 @@ export const ActividadesPage: React.FC = () => {
             )}
 
             <form onSubmit={handleEditarActividad} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-bold text-gray-700 mb-1">Proyecto Asignado *</label>
-                <select 
-                  required
-                  value={formDraft.projectId}
-                  onChange={e => setFormDraft({ ...formDraft, projectId: e.target.value })}
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none font-semibold text-gray-800"
-                >
-                  <option value="">-- Selecciona un Proyecto --</option>
-                  {proyectosDisponibles.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
+              {renderCampoProyecto()}
 
               <div>
                 <label className="block font-bold text-gray-700 mb-1">Título de la actividad *</label>
@@ -1050,10 +1454,22 @@ export const ActividadesPage: React.FC = () => {
                   <input 
                     type="date"
                     required
+                    min={fechaMinima}
+                    max={obtenerFechaFinProyectoActual() || undefined}
                     value={formDraft.fecha_limite}
-                    onChange={e => setFormDraft({ ...formDraft, fecha_limite: e.target.value })}
-                    className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
+                    onChange={e => handleCambiarFechaLimite(e.target.value)}
+                    className={`w-full p-2.5 border rounded-xl focus:outline-none ${
+                      fieldErrors.fecha_limite ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200'
+                    }`}
                   />
+                  {fieldErrors.fecha_limite && (
+                    <p className="text-[11px] text-red-600 font-semibold mt-1 leading-snug">{fieldErrors.fecha_limite}</p>
+                  )}
+                  {!fieldErrors.fecha_limite && obtenerFechaFinProyectoActual() && (
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      Este proyecto cierra el {formatearFechaCorta(obtenerFechaFinProyectoActual())}; la fecha límite no puede ser posterior.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block font-bold text-gray-700 mb-1">Estado *</label>
@@ -1090,8 +1506,8 @@ export const ActividadesPage: React.FC = () => {
                     className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
                   >
                     <option value="">-- Seleccionar --</option>
-                    {usuariosDisponibles.map(u => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
+                    {(usuariosFiltradosModal || []).map(u => (
+                      <option key={u?.id} value={u?.id}>{u?.name}</option>
                     ))}
                   </select>
                 </div>
@@ -1128,7 +1544,8 @@ export const ActividadesPage: React.FC = () => {
                 </button>
                 <button 
                   type="submit" 
-                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-sm cursor-pointer"
+                  disabled={!!fieldErrors.fecha_limite}
+                  className="px-5 py-2 bg-black text-white font-bold rounded-xl shadow-sm cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Guardar cambios
                 </button>

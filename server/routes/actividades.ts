@@ -42,6 +42,13 @@ const INCLUDE_RELATIONS = {
   evidence: true,
 };
 
+// ⚠️ Estas dos funciones son SOLO para Activity.status (enum PENDING/IN_PROCESS/
+// IN_REVIEW/DONE). NO deben usarse para Project.status — ese campo ahora es
+// String libre ('Activo' | 'En proceso' | 'En revisión' | 'Completado' | 'Pausado')
+// y pasar sus valores por este mapeo los reescribía silenciosamente a 'PENDING'
+// (por no matchear el case-sensitive 'En proceso' vs 'En Proceso'), guardando
+// literalmente el texto "PENDING" en la base y mostrando siempre "Activo" al
+// devolverlo. Ver normalizarEstadoProyecto() más abajo para el reemplazo correcto.
 function mapStatusToClient(status: string): string {
   switch (status) {
     case 'IN_PROCESS': return 'En Proceso';
@@ -53,9 +60,11 @@ function mapStatusToClient(status: string): string {
 }
 
 function mapStatusToPrisma(status: string): 'PENDING' | 'IN_PROCESS' | 'IN_REVIEW' | 'DONE' {
-  switch (status) {
+  switch (status?.trim()) {
+    case 'En proceso':
     case 'En Proceso':
     case 'IN_PROCESS': return 'IN_PROCESS';
+    case 'En revisión':
     case 'En Revisión':
     case 'IN_REVIEW': return 'IN_REVIEW';
     case 'Completado':
@@ -102,7 +111,7 @@ router.get('/proyectos', verificarToken, async (req: AuthRequest, res: Response)
         startDate: p.startDate,
         endDate: p.endDate,
         status: mapStatusToClient(p.status),
-        progress: progress,
+        progress,
         members: p.members.map((m: any) => m.user),
         evaluators: p.evaluators.map((e: any) => e.user)
       };
@@ -131,7 +140,7 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
   try {
     const parsedStartDate = startDate ? new Date(startDate) : null;
     const parsedEndDate = endDate ? new Date(endDate) : null;
-    const prismaStatus = mapStatusToPrisma(status);
+    const estadoProyecto = mapStatusToPrisma(status);
 
     const membersList: Array<{ id: string }> = Array.isArray(members) ? members : [];
     const evaluatorsList: Array<{ id: string }> = Array.isArray(evaluators) ? evaluators : [];
@@ -153,7 +162,7 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
           description: description?.trim() || null,
           startDate: parsedStartDate,
           endDate: parsedEndDate,
-          status: prismaStatus,
+          status: estadoProyecto,
           members: {
             create: membersList.map(m => ({ userId: m.id }))
           },
@@ -174,7 +183,7 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
           description: description?.trim() || null,
           startDate: parsedStartDate,
           endDate: parsedEndDate,
-          status: prismaStatus,
+          status: estadoProyecto,
           members: {
             create: membersList.map(m => ({ userId: m.id }))
           },
@@ -202,7 +211,12 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
         description: proyectoResult.description,
         startDate: proyectoResult.startDate,
         endDate: proyectoResult.endDate,
-        status: mapStatusToClient(proyectoResult.status),
+        // 🔧 FIX: antes era mapStatusToClient(proyectoResult.status), que
+        // volvía a traducir el string libre y regresaba siempre 'Activo'.
+        status: proyectoResult.status,
+        // ✅ NUEVO: antes la respuesta tampoco incluía la prioridad, así que
+        // aunque se hubiera guardado, el frontend nunca la recibía de vuelta.
+        priority: proyectoResult.priority || 'Alta',
         progress,
         members: proyectoResult.members.map((m: any) => m.user),
         evaluators: proyectoResult.evaluators.map((e: any) => e.user)
@@ -236,7 +250,7 @@ router.delete('/proyectos/:id', verificarToken, async (req: AuthRequest, res: Re
     // Limpiamos relaciones previas
     await db.projectMember.deleteMany({ where: { projectId: id as string } });
     await db.projectEvaluator.deleteMany({ where: { projectId: id as string } });
-    
+
     // Desvinculamos actividades asociadas para evitar conflictos de llave foránea
     await db.activity.updateMany({
       where: { projectId: id as string },

@@ -5,9 +5,6 @@ import * as z from 'zod';
 import { useNavigate, Link } from 'react-router-dom';
 import { API_BASE_URL } from '../config/api'; 
 
-/**
- * 1. ESQUEMA DE VALIDACIÓN CON ZOD (HU-009.1)
- */
 const loginSchema = z.object({
   email: z
     .string()
@@ -23,13 +20,8 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export const Login: React.FC = () => {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
-
-  // Estado local para capturar y mostrar errores de la API (HU-009.2 / HU-010.3)
   const [backendError, setBackendError] = useState<string | null>(null);
 
-  /**
-   * 2. CONFIGURACIÓN DE REACT HOOK FORM
-   */
   const {
     register,
     handleSubmit,
@@ -38,14 +30,11 @@ export const Login: React.FC = () => {
     resolver: zodResolver(loginSchema),
   });
 
-  /**
-   * 3. FUNCIÓN DE ENVÍO UNIFICADA (Conexión Frontend - Backend HU-009.2 y HU-011.2)
-   */
   const onSubmit = async (data: LoginFormData) => {
-    setBackendError(null); // Limpiamos errores previos
+    setBackendError(null);
 
     try {
-     const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,18 +47,14 @@ export const Login: React.FC = () => {
 
       const resData = await response.json();
 
-      // Si el servidor responde con un código de error (400, 401, 429)
       if (!response.ok) {
         throw new Error(resData.message || 'Credenciales incorrectas. Intenta de nuevo.');
       }
 
-      // 🟢 1. GUARDAR TOKEN Y DATOS DE USUARIO EN LOCALSTORAGE
       localStorage.setItem('token', resData.token);
-
       const userData = resData.user || { role: resData.role };
       localStorage.setItem('user', JSON.stringify(userData));
 
-      // 🔀 2. REDIRECCIÓN BASADA EN ROLES
       const userRole = String(userData.role || "").toLowerCase().trim();
 
       if (userRole === 'student') {
@@ -85,13 +70,13 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="bg-[#F6F7FB] min-h-screen flex flex-col items-center justify-center p-4 font-sans tracking-tight">
+    <div className="bg-background-login min-h-screen flex flex-col items-center justify-center p-4 font-['Inter',sans-serif] tracking-tight">
 
-      {/* SECCIÓN IDENTIDAD VISUAL - Título e Iconos Vectoriales */}
+      {/* SECCIÓN IDENTIDAD VISUAL CON LOS 3 ICONOS EXACTOS DE FIGMA */}
       <div className="text-center mb-5">
-        <h1 className="text-[40px] font-bold text-[#111827] tracking-tight mb-0.5">ClassBoard</h1>
+        <h1 className="text-[48px] font-black text-[#1a1d2e] tracking-tight mb-1">ClassBoard</h1>
 
-        <div className="flex justify-center gap-4 text-[#687280] text-sm mt-1">
+        <div className="flex justify-center gap-4 text-[#6b7280] text-sm mt-1">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
@@ -105,9 +90,8 @@ export const Login: React.FC = () => {
       </div>
 
       {/* TARJETA DEL FORMULARIO */}
-      <div className="bg-white p-9 rounded-[20px] border border-[#E5E7EB] w-full max-w-[400px] shadow-[0_4px_12px_rgba(0,0,0,0.02)]">
+      <div className="bg-white p-9 rounded-[20px] border border-border w-full max-w-100 shadow-sm">
 
-        {/* ALERTA DE ERROR GENERAL */}
         {backendError && (
           <div className="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm p-2.5 rounded-xl text-center font-medium">
             {backendError}
@@ -116,9 +100,9 @@ export const Login: React.FC = () => {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
 
-          {/* CAMPO: EMAIL */}
+          {/* CAMPO: EMAIL (Color #94A3BB como se observa en Figma) */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="email" className="text-[16px] font-regular text-[#111827]">
+            <label htmlFor="email" className="text-[15px] font-medium text-[#1a1d2e]">
               Email
             </label>
             <input
@@ -126,10 +110,10 @@ export const Login: React.FC = () => {
               type="email"
               id="email"
               placeholder="email@example.com"
-              className={`w-full px-4 py-2.5 rounded-xl text-black font-regular placeholder-[#687280] focus:outline-none transition-all text-[15px] ${
+              className={`w-full px-4 py-2.5 rounded-xl text-white font-normal placeholder-gray-200 focus:outline-none transition-all text-[15px] ${
                 errors.email
-                  ? 'bg-red-50 border-2 border-red-500'
-                  : 'bg-[#94A3BB] text-white placeholder-gray-200 border border-transparent focus:bg-[#8392AA]'
+                  ? 'bg-red-50 border-2 border-red-500 text-[#1a1d2e]'
+                  : 'bg-[#94A3BB] border border-transparent focus:bg-[#8392AA]'
               }`}
             />
             {errors.email && (
@@ -139,7 +123,7 @@ export const Login: React.FC = () => {
 
           {/* CAMPO: CONTRASEÑA */}
           <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="text-[16px] font-regular text-[#111827]">
+            <label htmlFor="password" className="text-[15px] font-medium text-[#1a1d2e]">
               Contraseña
             </label>
             <div className="relative">
@@ -148,16 +132,16 @@ export const Login: React.FC = () => {
                 type={showPassword ? 'text' : 'password'}
                 id="password"
                 placeholder="••••••••••••"
-                className={`w-full px-4 py-2.5 rounded-xl text-[#111827] font-regular placeholder-[#687280] border focus:outline-none transition-all pr-12 text-[15px] ${
+                className={`w-full px-4 py-2.5 rounded-xl text-[#1a1d2e] font-normal placeholder-[#6b7280] border focus:outline-none transition-all pr-12 text-[15px] ${
                   errors.password
                     ? 'bg-red-50 border-2 border-red-500'
-                    : 'bg-[#F6F7FB] border-[#E5E7EB] focus:border-[#94A3BB]'
+                    : 'bg-[#f4f5f8] border-border focus:border-primary'
                 }`}
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#687280] hover:text-[#111827] transition-colors"
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-[#6b7280] hover:text-[#1a1d2e] transition-colors"
                 aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -175,31 +159,31 @@ export const Login: React.FC = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-[#0B1026] hover:bg-opacity-95 text-white font-semibold py-3 px-4 rounded-xl transition-all text-[16px] mt-2 disabled:opacity-50"
+            className="w-full bg-[#1a1d2e] hover:bg-black text-white font-semibold py-3 px-4 rounded-xl transition-all text-[16px] mt-2 disabled:opacity-50 shadow-sm cursor-pointer"
           >
             {isSubmitting ? 'Iniciando sesión...' : 'Iniciar sesión'}
           </button>
 
-          {/* SOPORTE DE CUENTA (CORREGIDO) */}
+          {/* ¿OLVIDASTE TU CONTRASEÑA? */}
           <div className="text-center pt-1">
-            <Link to="/recuperar-password" className="text-[16px] font-regular text-[#111827] hover:underline">
+            <Link to="/recuperar-password" className="text-[14px] font-normal text-[#1a1d2e] hover:underline">
               ¿Olvidaste tu contraseña?
             </Link>
           </div>
 
-          {/* DIVISOR INTERMEDIO */}
+          {/* DIVISOR INTERMEDIO CON LA 'o' EN CÍRCULO */}
           <div className="relative flex py-2 items-center justify-center">
-            <div className="flex-grow border-t border-[#E5E7EB]"></div>
-            <span className="flex-shrink mx-3 text-[13px] text-[#687280] border border-[#E5E7EB] rounded-full w-5 h-5 flex items-center justify-center bg-white">
+            <div className="grow border-t border-border"></div>
+            <span className="shrink mx-3 text-[13px] text-[#6b7280] border border-border rounded-full w-5 h-5 flex items-center justify-center bg-white">
               o
             </span>
-            <div className="flex-grow border-t border-[#E5E7EB]"></div>
+            <div className="grow border-t border-border"></div>
           </div>
 
           {/* REDIRECCIÓN A REGISTRO */}
-          <div className="text-center text-[16px] text-[#687280]">
+          <div className="text-center text-[14px] text-[#6b7280]">
             ¿No tienes una cuenta?{' '}
-            <Link to="/register" className="text-[#111827] font-semibold hover:underline ml-1">
+            <Link to="/register" className="text-[#1a1d2e] font-semibold hover:underline ml-1">
               Registrarse
             </Link>
           </div>
@@ -208,3 +192,5 @@ export const Login: React.FC = () => {
     </div>
   );
 };
+
+export default Login;
