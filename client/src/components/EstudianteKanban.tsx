@@ -341,12 +341,6 @@ export const EstudianteKanban: React.FC = () => {
   const [creando, setCreando] = useState(false);
   const [errorCrear, setErrorCrear] = useState<string | null>(null);
 
-  const _openCreate = (estado: EstadoActividad) => {
-    setCreateModal(estado);
-    setCreateDraft({ name: "", description: "", deadline: new Date().toISOString().split("T")[0], priority: "MED" });
-    setErrorCrear(null);
-  };
-
   const closeCreate = () => {
     setCreateModal(null);
   };

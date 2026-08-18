@@ -101,11 +101,6 @@ export const EstudianteDashboard: React.FC = () => {
     { name: "Completados", value: completadas },
   ];
 
-  const _proximasActividades = [...actividadesVisibles]
-    .filter(a => a.status !== 'DONE')
-    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
-    .slice(0, 3);
-
   const recentLogs = [...actividadesVisibles]
     .sort((a, b) => {
       const dateA = new Date(a.updatedAt || a.createdAt || a.deadline).getTime();
