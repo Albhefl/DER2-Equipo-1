@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell 
 } from 'recharts';
 import { 
-  ListChecks, Clock, AlertCircle, Eye, CheckCircle2, LayoutGrid, Circle 
+  ListChecks, Clock, AlertCircle, Eye, CheckCircle2, LayoutGrid
 } from 'lucide-react';
 
 import { ProgressBar } from './ProgressBar';
@@ -100,11 +100,6 @@ export const EstudianteDashboard: React.FC = () => {
     { name: "En Revisión", value: enRevision },
     { name: "Completados", value: completadas },
   ];
-
-  const proximasActividades = [...actividadesVisibles]
-    .filter(a => a.status !== 'DONE')
-    .sort((a, b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime())
-    .slice(0, 3);
 
   const recentLogs = [...actividadesVisibles]
     .sort((a, b) => {

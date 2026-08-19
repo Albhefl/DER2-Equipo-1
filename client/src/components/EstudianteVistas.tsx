@@ -1204,8 +1204,15 @@ export const ActividadesPage: React.FC = () => {
                       {renderStatusIcon(act.status)}
                     </div>
                     <div className="min-w-0">
-                      <h4 className="font-bold text-gray-900 text-xs truncate">{act.name}</h4>
-                      <p className="text-[11px] text-gray-400 font-medium mt-0.5">Fecha límite: {formatearFecha(act.deadline)}</p>
+                      <h4 className="font-bold text-gray-900 text-sm truncate">{act.name}</h4>
+                      <p className="text-xs text-gray-400 font-medium mt-0.5">Fecha límite: {formatearFecha(act.deadline)}</p>
+                      {act.projectId && (
+                        <div className="mt-1">
+                          <span className="inline-flex items-center px-2 py-0.5 bg-white border border-gray-200 shadow-sm text-gray-800 rounded-lg text-[11px] font-bold">
+                            {proyectosDisponibles.find(p => p.id === act.projectId)?.name || 'ClassBoard Equipo A'}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 

@@ -17,9 +17,22 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🟢 CORS ahora usa la variable de entorno CLIENT_URL
+// 🟢 CORS robusto para producción
+const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173')
+  .split(',')
+  .map(o => o.trim().replace(/\/$/, '')); // Quitar slash final
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: (origin, callback) => {
+    // Permitir requests sin origin (Postman, curl, etc.)
+    if (!origin) return callback(null, true);
+    const cleanOrigin = origin.replace(/\/$/, '');
+    if (allowedOrigins.includes(cleanOrigin) || allowedOrigins.includes('*')) {
+      return callback(null, true);
+    }
+    console.warn(`CORS bloqueado para: ${origin}`);
+    return callback(new Error('No permitido por CORS'), false);
+  },
   credentials: true,
 }));
 
