@@ -139,6 +139,14 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
     return res.status(400).json({ message: 'El nombre del proyecto es obligatorio.' });
   }
 
+  if (name.length > 100) {
+    return res.status(400).json({ message: 'El nombre del proyecto no puede exceder los 100 caracteres.' });
+  }
+
+  if (description && description.length > 500) {
+    return res.status(400).json({ message: 'La descripción no puede exceder los 500 caracteres.' });
+  }
+
   try {
     const parsedStartDate = startDate ? new Date(startDate) : null;
     const parsedEndDate = endDate ? new Date(endDate) : null;
@@ -326,6 +334,14 @@ router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promis
   try {
     if (!nombre || nombre.trim() === '') {
       return res.status(400).json({ message: 'El nombre es obligatorio.' });
+    }
+
+    if (nombre.length > 100) {
+      return res.status(400).json({ message: 'El nombre no puede exceder los 100 caracteres.' });
+    }
+
+    if (descripcion && descripcion.length > 500) {
+      return res.status(400).json({ message: 'La descripción no puede exceder los 500 caracteres.' });
     }
 
     const hoy = new Date();

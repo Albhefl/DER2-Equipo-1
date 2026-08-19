@@ -37,14 +37,14 @@ interface ProyectoDetalle {
 function statusBadgeStyle(status: string) {
   switch (status) {
     case 'En proceso':
-    case 'IN_PROCESS': return 'bg-blue-50 text-blue-600 border border-blue-100';
+    case 'IN_PROCESS': return 'bg-[#dbeafe] text-[#1d4ed8] border border-blue-100';
     case 'Completado':
-    case 'DONE': return 'bg-green-50 text-green-600 border border-green-100';
+    case 'DONE': return 'bg-[#dcfce7] text-[#15803d] border border-green-100';
     case 'En revisión':
-    case 'IN_REVIEW': return 'bg-amber-50 text-amber-600 border border-amber-100';
+    case 'IN_REVIEW': return 'bg-[#fef3c7] text-[#b45309] border border-amber-100';
     case 'Activo':
-    case 'PENDING':
-    default: return 'bg-gray-50 text-gray-500 border border-gray-100';
+    case 'PENDING': return 'bg-[#d1fae5] text-[#047857] border border-emerald-100';
+    default: return 'bg-[#f4f5f8] text-[#6b7280] border border-gray-100';
   }
 }
 

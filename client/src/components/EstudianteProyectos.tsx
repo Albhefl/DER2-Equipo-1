@@ -381,10 +381,11 @@ export const EstudianteProyectos: React.FC = () => {
                 <input 
                   type="text" 
                   required
+                  maxLength={100}
                   disabled={!!successMessage}
                   value={formProyecto.name}
                   onChange={e => setFormProyecto({ ...formProyecto, name: e.target.value })}
-                  className="w-full p-2.5 bg-[#f4f5f8] border border-border rounded-xl text-xs font-medium text-[#1a1d2e] focus:outline-none focus:bg-white focus:border-primary transition"
+                  className="w-full p-2.5 bg-[#f4f5f8] border border-border rounded-xl text-xs font-medium text-[#1a1d2e] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white focus:border-primary transition"
                 />
               </div>
 
@@ -393,10 +394,11 @@ export const EstudianteProyectos: React.FC = () => {
                 <textarea 
                   rows={3}
                   required
+                  maxLength={500}
                   disabled={!!successMessage}
                   value={formProyecto.description}
                   onChange={e => setFormProyecto({ ...formProyecto, description: e.target.value })}
-                  className="w-full p-2.5 bg-[#f4f5f8] border border-border rounded-xl text-xs font-medium text-[#1a1d2e] focus:outline-none focus:bg-white focus:border-primary transition resize-none"
+                  className="w-full p-2.5 bg-[#f4f5f8] border border-border rounded-xl text-xs font-medium text-[#1a1d2e] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white focus:border-primary transition resize-none"
                 />
               </div>
 
@@ -428,7 +430,7 @@ export const EstudianteProyectos: React.FC = () => {
                     disabled={!!successMessage}
                     value={formProyecto.priority || 'Alta'}
                     onChange={e => setFormProyecto({ ...formProyecto, priority: e.target.value })}
-                    className="w-full p-2.5 bg-[#f4f5f8] border border-border rounded-xl text-xs font-medium text-[#1a1d2e] focus:outline-none focus:bg-white focus:border-primary transition"
+                    className="w-full p-2.5 bg-[#f4f5f8] border border-border rounded-xl text-xs font-medium text-[#1a1d2e] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white focus:border-primary transition"
                   >
                     <option value="Alta">Alta</option>
                     <option value="Media">Media</option>
@@ -441,7 +443,7 @@ export const EstudianteProyectos: React.FC = () => {
                     disabled={!!successMessage}
                     value={formProyecto.status || 'Activo'}
                     onChange={e => setFormProyecto({ ...formProyecto, status: e.target.value })}
-                    className="w-full p-2.5 bg-[#f4f5f8] border border-border rounded-xl text-xs font-medium text-[#1a1d2e] focus:outline-none focus:bg-white focus:border-primary transition"
+                    className="w-full p-2.5 bg-[#f4f5f8] border border-border rounded-xl text-xs font-medium text-[#1a1d2e] focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white focus:border-primary transition"
                   >
                     <option value="Activo">Activo</option>
                     <option value="En proceso">En proceso</option>

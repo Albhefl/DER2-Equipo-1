@@ -1314,10 +1314,11 @@ export const ActividadesPage: React.FC = () => {
                 <input 
                   type="text"
                   required
+                  maxLength={100}
                   value={formDraft.nombre}
                   onChange={e => setFormDraft({ ...formDraft, nombre: e.target.value })}
                   placeholder="Ej. Investigar usuarios"
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                 />
               </div>
 
@@ -1331,7 +1332,7 @@ export const ActividadesPage: React.FC = () => {
                     max={obtenerFechaFinProyectoActual() || undefined}
                     value={formDraft.fecha_limite}
                     onChange={e => handleCambiarFechaLimite(e.target.value)}
-                    className={`w-full p-2.5 border rounded-xl focus:outline-none ${
+                    className={`w-full p-2.5 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30 ${
                       fieldErrors.fecha_limite ? 'bg-red-50 border-red-300' : 'bg-gray-50 border-gray-200'
                     }`}
                   />
@@ -1349,7 +1350,7 @@ export const ActividadesPage: React.FC = () => {
                   <select 
                     value={formDraft.estado}
                     onChange={e => setFormDraft({ ...formDraft, estado: e.target.value })}
-                    className="w-full p-2.5 bg-white border border-gray-300 rounded-xl focus:outline-none focus:border-black font-semibold text-gray-900 cursor-pointer"
+                    className="w-full p-2.5 bg-white border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30 font-semibold text-gray-900 cursor-pointer"
                   >
                     <option value="PENDING">Pendiente</option>
                     <option value="IN_PROCESS">En Proceso</option>
@@ -1364,10 +1365,11 @@ export const ActividadesPage: React.FC = () => {
                 <textarea 
                   rows={3}
                   required
+                  maxLength={500}
                   value={formDraft.descripcion}
                   onChange={e => setFormDraft({ ...formDraft, descripcion: e.target.value })}
                   placeholder="Describe el objetivo y alcance de la actividad."
-                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none resize-none"
+                  className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/30 resize-none"
                 />
               </div>
 

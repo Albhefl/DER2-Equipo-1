@@ -441,7 +441,7 @@ export const EstudianteKanban: React.FC = () => {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar tarjeta..."
-              className="w-full pl-9 pr-3 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40"
+              className="w-full pl-9 pr-3 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all text-[#6b7280] shadow-sm shadow-gray-100/40"
             />
           </div>
 
@@ -451,7 +451,7 @@ export const EstudianteKanban: React.FC = () => {
             <select
               value={projectIdParam || ""}
               onChange={e => handleFiltroProyectoChange(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
             >
               <option value="">Proyecto: Todos</option>
               {proyectos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -464,7 +464,7 @@ export const EstudianteKanban: React.FC = () => {
             <select
               value={filtroResponsable}
               onChange={e => setFiltroResponsable(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
             >
               <option value="">Responsable: Todos</option>
               {responsablesDisponibles.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -477,7 +477,7 @@ export const EstudianteKanban: React.FC = () => {
             <select
               value={filtroPrioridad}
               onChange={e => setFiltroPrioridad(e.target.value)}
-              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
             >
               <option value="">Prioridad: Todas</option>
               <option value="HIGH">Alta</option>
@@ -492,7 +492,7 @@ export const EstudianteKanban: React.FC = () => {
             <select
               value={ordenFecha}
               onChange={e => setOrdenFecha(e.target.value as OrdenFecha)}
-              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:border-primary transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
+              className="w-full pl-9 pr-8 py-2 bg-white border border-border rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all text-[#6b7280] shadow-sm shadow-gray-100/40 cursor-pointer truncate"
             >
               <option value="">Ordenar fecha</option>
               <option value="asc">Más próxima primero</option>
@@ -682,7 +682,7 @@ export const EstudianteKanban: React.FC = () => {
                   type="text"
                   value={editDraft.name}
                   onChange={e => setEditDraft(d => d && ({ ...d, name: e.target.value }))}
-                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all box-border"
                 />
               </div>
 
@@ -706,7 +706,7 @@ export const EstudianteKanban: React.FC = () => {
                   <select
                     value={miembroSeleccionado}
                     onChange={e => setMiembroSeleccionado(e.target.value)}
-                    className="flex-1 min-w-0 p-2 bg-white border border-border rounded-lg text-xs font-medium text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border cursor-pointer"
+                    className="flex-1 min-w-0 p-2 bg-white border border-border rounded-lg text-xs font-medium text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all box-border cursor-pointer"
                   >
                     <option value="">{disponibles.length > 0 ? "Agregar responsable..." : "Sin compañeros disponibles"}</option>
                     {disponibles.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
@@ -727,7 +727,7 @@ export const EstudianteKanban: React.FC = () => {
                 <select
                   value={editDraft.priority}
                   onChange={e => setEditDraft(d => d && ({ ...d, priority: e.target.value as PrioridadActividad }))}
-                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border cursor-pointer"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all box-border cursor-pointer"
                 >
                   {(["HIGH", "MED", "LOW"] as PrioridadActividad[]).map(p => <option key={p} value={p}>{PRIORIDAD_LABELS[p]}</option>)}
                 </select>
@@ -738,7 +738,7 @@ export const EstudianteKanban: React.FC = () => {
                   type="date"
                   value={editDraft.deadline}
                   onChange={e => setEditDraft(d => d && ({ ...d, deadline: e.target.value }))}
-                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:border-primary transition-all box-border cursor-pointer"
+                  className="w-full p-2.5 bg-white border border-border rounded-xl text-xs font-semibold text-[#6b7280] focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all box-border cursor-pointer"
                 />
               </div>
               <div>
