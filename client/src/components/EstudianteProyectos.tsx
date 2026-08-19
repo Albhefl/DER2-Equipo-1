@@ -331,17 +331,17 @@ export const EstudianteProyectos: React.FC = () => {
   };
 
   const proyectosFiltrados = proyectos.filter(p => {
-    const coincideEstado = filterStatus === 'Todos' || p.status === filterStatus;
-    const coincideBusqueda = p.name.toLowerCase().includes(search.toLowerCase());
+    const coincideEstado = filterStatus === 'Todos' || (p.status || '').toLowerCase() === filterStatus.toLowerCase();
+    const coincideBusqueda = (p.name || '').toLowerCase().includes(search.toLowerCase());
     return coincideEstado && coincideBusqueda;
   });
 
   const counts = {
     total: proyectos.length,
-    activos: proyectos.filter(p => p.status === 'Activo').length,
-    enProceso: proyectos.filter(p => p.status === 'En proceso').length,
-    enRevision: proyectos.filter(p => p.status === 'En revisión').length,
-    completados: proyectos.filter(p => p.status === 'Completado').length,
+    activos: proyectos.filter(p => (p.status || '').toLowerCase() === 'activo').length,
+    enProceso: proyectos.filter(p => (p.status || '').toLowerCase() === 'en proceso').length,
+    enRevision: proyectos.filter(p => (p.status || '').toLowerCase() === 'en revisión').length,
+    completados: proyectos.filter(p => (p.status || '').toLowerCase() === 'completado').length,
   };
 
   if (modo === 'crear' || modo === 'editar') {

@@ -140,7 +140,7 @@ router.post('/proyectos', verificarToken, async (req: AuthRequest, res: Response
   }
 
   try {
-    const parsedStartDate = startDate ? new Date(startDate) : null;
+    const parsedStartDate = startDate ? new Date(startDate) : new Date();
     const parsedEndDate = endDate ? new Date(endDate) : null;
     const estadoProyecto = mapStatusToPrisma(status);
 
@@ -329,8 +329,9 @@ router.post('/', verificarToken, async (req: AuthRequest, res: Response): Promis
     }
 
     const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    hoy.setUTCHours(0, 0, 0, 0);
     const fechaSeleccionada = new Date(fecha_limite);
+    fechaSeleccionada.setUTCHours(0, 0, 0, 0);
 
     if (!fecha_limite || fechaSeleccionada < hoy) {
       return res.status(400).json({ message: 'La fecha límite no puede ser anterior a hoy.' });
@@ -442,8 +443,9 @@ router.put('/:id', verificarToken, async (req: AuthRequest, res: Response): Prom
     if (!nombre || nombre.trim() === '') return res.status(400).json({ message: 'El nombre es obligatorio.' });
 
     const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
+    hoy.setUTCHours(0, 0, 0, 0);
     const fechaSeleccionada = new Date(fecha_limite);
+    fechaSeleccionada.setUTCHours(0, 0, 0, 0);
 
     if (!fecha_limite || fechaSeleccionada < hoy) {
       return res.status(400).json({ message: 'La fecha límite no puede ser anterior a hoy.' });

@@ -731,7 +731,7 @@ export const ActividadesPage: React.FC = () => {
 
   const proyectoSeleccionadoEnModal = (proyectosDisponibles || []).find(p => p.id === formDraft.projectId);
   const usuariosFiltradosModal = proyectoSeleccionadoEnModal?.members
-    ? proyectoSeleccionadoEnModal.members.map(m => m.user).filter(Boolean)
+    ? proyectoSeleccionadoEnModal.members.filter(Boolean)
     : (usuariosDisponibles || []);
 
   const renderCampoProyecto = () => {
