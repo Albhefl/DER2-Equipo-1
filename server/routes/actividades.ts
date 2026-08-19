@@ -1,6 +1,6 @@
 import { Router, type Response } from 'express';
 import db from '../src/db.js';
-import { verificarToken, type AuthRequest } from '../middleware/auth.js';
+import { verificarToken, verificarRol, type AuthRequest } from '../middleware/auth.js';
 import multer, { type FileFilterCallback } from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -293,7 +293,7 @@ router.get('/', verificarToken, async (req: AuthRequest, res: Response): Promise
 
   try {
     const where = rol === 'EVALUATOR'
-      ? {}
+      ? { project: { evaluators: { some: { userId: usuario_id } } } }
       : {
           OR: [
             { project: { members: { some: { userId: usuario_id } } } },
@@ -696,13 +696,18 @@ router.get('/:id/evaluacion', verificarToken, async (req: AuthRequest, res: Resp
   }
 });
 
-router.post('/:id/evaluar', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+router.post('/:id/evaluar', verificarToken, verificarRol('EVALUATOR'), async (req: AuthRequest, res: Response): Promise<any> => {
   const { id } = req.params;
   const { score, criterios, comentario, status } = req.body;
   const usuario_id = req.user?.userId;
 
   if (!id) return res.status(400).json({ message: 'ID de actividad requerido.' });
   if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
+  const numScore = Number(score);
+  if (isNaN(numScore) || numScore < 0 || numScore > 100) {
+    return res.status(400).json({ message: 'El score debe ser un número entre 0 y 100.' });
+  }
 
   try {
     const actividadExistente = await db.activity.findUnique({

@@ -32,6 +32,10 @@ model User {
   role           Role
   name           String
   profilePicture String?  @map("profile_picture")
+  phone          String?
+  university     String?
+  career         String?
+  semester       Int?
   createdAt      DateTime @default(now()) @map("created_at")
 
   assignedActivities ActivityAssignee[]

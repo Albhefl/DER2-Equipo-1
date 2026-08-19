@@ -30,3 +30,12 @@ export function verificarToken(req: AuthRequest, res: Response, next: NextFuncti
     return res.status(401).json({ message: 'Token inválido o expirado.' });
   }
 }
+
+export function verificarRol(rolRequerido: string) {
+  return (req: AuthRequest, res: Response, next: NextFunction) => {
+    if (req.user?.role !== rolRequerido) {
+      return res.status(403).json({ message: 'Acceso denegado: rol insuficiente' });
+    }
+    next();
+  };
+}
