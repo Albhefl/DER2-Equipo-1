@@ -195,6 +195,27 @@ export const EstudiantePerfil: React.FC = () => {
 
       const draftFinal = { ...draft, profilePicture: profilePictureFinal };
 
+      const token = localStorage.getItem("token");
+      const updateRes = await fetch(`${SERVER_URL}/api/usuarios/perfil`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          name: draftFinal.name,
+          phone: draftFinal.phone,
+          university: draftFinal.university,
+          career: draftFinal.career,
+          semester: draftFinal.semester
+        })
+      });
+
+      if (!updateRes.ok) {
+        const errData = await updateRes.json().catch(() => ({}));
+        throw new Error(errData.message || 'No se pudieron actualizar los datos del perfil.');
+      }
+
       const storedUser = localStorage.getItem("user");
       const currentObj = storedUser ? JSON.parse(storedUser) : {};
       const updatedObj = { ...currentObj, ...draftFinal };
@@ -225,13 +246,13 @@ export const EstudiantePerfil: React.FC = () => {
     setSelectedFile(null);
   };
 
-  const campos: { label: string; key: keyof ProfileData; icon: React.ReactNode }[] = [
-    { label: "Nombre completo", key: "name", icon: <User size={14} /> },
-    { label: "Correo electrónico", key: "email", icon: <Mail size={14} /> },
-    { label: "Teléfono", key: "phone", icon: <Phone size={14} /> },
-    { label: "Universidad", key: "university", icon: <Building size={14} /> },
-    { label: "Carrera", key: "career", icon: <FileText size={14} /> },
-    { label: "Semestre", key: "semester", icon: <CalendarDays size={14} /> },
+  const campos: { label: string; key: keyof ProfileData; icon: React.ReactNode; type?: string; maxLength?: number; pattern?: string; title?: string }[] = [
+    { label: "Nombre completo", key: "name", icon: <User size={14} />, maxLength: 100 },
+    { label: "Correo electrónico", key: "email", icon: <Mail size={14} />, type: "email" },
+    { label: "Teléfono", key: "phone", icon: <Phone size={14} />, type: "tel", pattern: "^\\d{10}$", title: "El teléfono debe contener exactamente 10 números", maxLength: 10 },
+    { label: "Universidad", key: "university", icon: <Building size={14} />, pattern: "^[A-Za-zÁÉÍÓÚáéíóúÑñ\\s]+$", title: "Solo letras y espacios", maxLength: 35 },
+    { label: "Carrera", key: "career", icon: <FileText size={14} />, pattern: "^[A-Za-zÁÉÍÓÚáéíóúÑñ\\s]+$", title: "Solo letras y espacios", maxLength: 35 },
+    { label: "Semestre", key: "semester", icon: <CalendarDays size={14} />, type: "number", pattern: "^[1-9][0-9]?$", title: "Número de semestre" },
   ];
 
   // 🟢 qué imagen mostrar en el avatar (previsualización local > la guardada)
@@ -385,6 +406,10 @@ export const EstudiantePerfil: React.FC = () => {
                 <input
                   value={draft[f.key] as string}
                   onChange={setField(f.key)}
+                  type={f.type || "text"}
+                  maxLength={f.maxLength}
+                  pattern={f.pattern}
+                  title={f.title}
                   className="w-full min-w-0 px-3 py-2 rounded-lg border border-border bg-input-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition"
                 />
               )}

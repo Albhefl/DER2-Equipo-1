@@ -136,4 +136,54 @@ router.get('/evaluadores', verificarToken, async (req: AuthRequest, res: Respons
   }
 });
 
+/**
+ * =========================================================================
+ * ENDPOINT: PUT /api/usuarios/perfil
+ * Actualiza los datos del perfil (nombre, teléfono, universidad, etc.)
+ * =========================================================================
+ */
+router.put('/perfil', verificarToken, async (req: AuthRequest, res: Response): Promise<any> => {
+  try {
+    const { name, phone, university, career, semester } = req.body;
+    const usuario_id = req.user?.userId;
+
+    if (!usuario_id) return res.status(401).json({ message: 'Usuario no autenticado.' });
+
+    // Validaciones
+    const letrasRegex = /^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]+$/;
+
+    if (phone && !/^\d{10}$/.test(phone)) {
+      return res.status(400).json({ message: 'El teléfono debe contener exactamente 10 números.' });
+    }
+    if (university) {
+      if (university.length > 35) return res.status(400).json({ message: 'La universidad no debe exceder 35 caracteres.' });
+      if (!letrasRegex.test(university)) return res.status(400).json({ message: 'La universidad solo debe contener letras y espacios.' });
+    }
+    if (career) {
+      if (career.length > 35) return res.status(400).json({ message: 'La carrera no debe exceder 35 caracteres.' });
+      if (!letrasRegex.test(career)) return res.status(400).json({ message: 'La carrera solo debe contener letras y espacios.' });
+    }
+
+    const updatedUser = await db.user.update({
+      where: { id: usuario_id },
+      data: {
+        name: name || undefined,
+        phone: phone || null,
+        university: university || null,
+        career: career || null,
+        semester: semester ? Number(semester) : null,
+      },
+      select: {
+        id: true, name: true, email: true, profilePicture: true,
+        phone: true, university: true, career: true, semester: true
+      }
+    });
+
+    return res.status(200).json({ message: 'Perfil actualizado', usuario: updatedUser });
+  } catch (error) {
+    console.error('Error al actualizar perfil:', error);
+    return res.status(500).json({ message: 'Error interno en el servidor.' });
+  }
+});
+
 export default router;
