@@ -395,8 +395,10 @@ export const EstudianteKanban: React.FC = () => {
     }
   };
 
+  const proyectoDeActividad = proyectos.find(p => p.id === editModal?.projectId);
+  const miembrosBase = proyectoDeActividad?.members || miembrosEquipo;
   const disponibles = editModal
-    ? miembrosEquipo.filter(m => !editModal.assignees.some(r => r.user.id === m.id))
+    ? miembrosBase.filter((m: any) => !editModal.assignees.some(r => r.user.id === m.id))
     : [];
 
   const actividadesVisibles = actividades.filter(a => !projectIdParam || a.projectId === projectIdParam);

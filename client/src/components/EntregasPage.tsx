@@ -6,7 +6,7 @@ import { API_BASE_URL } from '../config/api';
 
 const API_ACTIVIDADES_URL = `${API_BASE_URL}/actividades`;
 
-type EstadoEntrega = 'Pendiente' | 'En Revisión' | 'Aprobado' | 'Completada';
+type EstadoEntrega = 'Pendiente' | 'En Proceso' | 'En Revisión' | 'Completada';
 
 interface EvidenciaItem {
   id: string;
@@ -65,8 +65,8 @@ export const EntregasPage: React.FC = () => {
 
         const listaMapeada: Entrega[] = listaRaw.map((a: any) => {
           let st: EstadoEntrega = 'Pendiente';
-          if (a.status === 'IN_REVIEW' || a.status === 'En Revisión') st = 'En Revisión';
-          if (a.status === 'APPROVED' || a.status === 'Aprobado') st = 'Aprobado';
+          if (a.status === 'IN_PROCESS' || a.status === 'En Proceso' || a.status === 'En proceso') st = 'En Proceso';
+          if (a.status === 'IN_REVIEW' || a.status === 'En Revisión' || a.status === 'En revisión') st = 'En Revisión';
           if (a.status === 'DONE' || a.status === 'Completado' || a.status === 'Completada') st = 'Completada';
 
           const listaEvidencias = a.evidencias || a.evidence || [];
@@ -208,8 +208,8 @@ export const EntregasPage: React.FC = () => {
   const getBadgeStyle = (status: EstadoEntrega) => {
     switch (status) {
       case 'Pendiente': return 'bg-gray-100/80 text-gray-600 font-bold';
+      case 'En Proceso': return 'bg-[#dbeafe] text-[#1d4ed8] border-[#bfdbfe]';
       case 'En Revisión': return 'bg-amber-100/80 text-amber-700 font-bold';
-      case 'Aprobado': return 'bg-emerald-100/80 text-emerald-700 font-bold';
       case 'Completada': return 'bg-green-100/80 text-green-700 font-bold';
     }
   };
