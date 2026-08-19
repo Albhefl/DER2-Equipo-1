@@ -264,7 +264,11 @@ export const EditarPerfilEvaluador: React.FC = () => {
             </div>
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Teléfono</label>
-              <input type="text" value={telefono} onChange={(e) => setTelefono(e.target.value)} className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:border-blue-400 transition-all box-border" />
+              <input type="text" value={telefono} onChange={(e) => {
+                let val = e.target.value.replace(/\D/g, '');
+                if (val.length > 10) val = val.slice(0, 10);
+                setTelefono(val);
+              }} className="w-full p-2.5 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 outline-none focus:border-blue-400 transition-all box-border" />
             </div>
             <div>
               <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Ciudad / Estado</label>

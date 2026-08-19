@@ -177,7 +177,17 @@ export const EstudiantePerfil: React.FC = () => {
   };
 
   const setField = (k: keyof ProfileData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    setDraft(d => ({ ...d, [k]: e.target.value }));
+    let value = e.target.value;
+
+    if (k === 'phone') {
+      value = value.replace(/\D/g, ''); // Solo dígitos
+      if (value.length > 10) value = value.slice(0, 10);
+    } else if (k === 'university' || k === 'career') {
+      value = value.replace(/[^A-Za-zÁÉÍÓÚáéíóúÑñ\s]/g, ''); // Solo letras y espacios
+      if (value.length > 35) value = value.slice(0, 35);
+    }
+
+    setDraft(d => ({ ...d, [k]: value }));
   };
 
   // 🟢 ahora es async. Si hay una foto pendiente, primero la sube;
